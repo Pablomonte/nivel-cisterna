@@ -210,21 +210,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   </div>
 </div>
 
-<div class="card" id="pumpCard" style="display:none">
-  <div class="pump-status">
-    <div>
-      <span class="pump-indicator" id="pumpDot"></span>
-      <span class="label">Bomba: </span>
-      <strong id="pumpState">--</strong>
-    </div>
-    <div>
-      <button class="btn" onclick="pumpAction('on')">ON</button>
-      <button class="btn" onclick="pumpAction('off')">OFF</button>
-      <button class="btn" onclick="pumpAction('auto')">AUTO</button>
-    </div>
-  </div>
-</div>
-
 <div class="device-name" id="deviceName"></div>
 <div class="footer">nivel-cisterna <span id="fwVersion"></span></div>
 
@@ -247,34 +232,22 @@ function updateData() {
       }
 
       // Stats
-      document.getElementById('distVal').textContent = 
+      document.getElementById('distVal').textContent =
         d.distance >= 0 ? d.distance.toFixed(1) : '--';
-      document.getElementById('volVal').textContent = 
+      document.getElementById('volVal').textContent =
         d.volume >= 0 ? Math.round(d.volume) : '--';
-      document.getElementById('capVal').textContent = 
+      document.getElementById('capVal').textContent =
         d.capacity ? Math.round(d.capacity) : '--';
-      document.getElementById('sensorStatus').textContent = 
+      document.getElementById('sensorStatus').textContent =
         d.sensor_ok ? '✓' : '✗';
-      document.getElementById('sensorStatus').style.color = 
+      document.getElementById('sensorStatus').style.color =
         d.sensor_ok ? '#22c55e' : '#ef4444';
-
-      // Pump
-      if (d.pump_enabled) {
-        document.getElementById('pumpCard').style.display = 'block';
-        const dot = document.getElementById('pumpDot');
-        dot.className = 'pump-indicator ' + (d.pump_on ? 'on' : d.pump_state === 'timeout' ? 'timeout' : 'off');
-        document.getElementById('pumpState').textContent = d.pump_state || 'off';
-      }
 
       // Device info
       document.getElementById('deviceName').textContent = d.device || '';
       document.getElementById('fwVersion').textContent = d.version || '';
     })
     .catch(() => {});
-}
-
-function pumpAction(action) {
-  fetch('/api/pump?action=' + action, { method: 'POST' }).then(() => updateData());
 }
 
 updateData();

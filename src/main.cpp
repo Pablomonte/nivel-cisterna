@@ -9,7 +9,6 @@
 #include "config_manager.h"
 #include "tank.h"
 #include "level_sensor.h"
-#include "pump_controller.h"
 #include "grafana.h"
 #include "web_dashboard.h"
 
@@ -17,7 +16,6 @@
 WebServer server(80);
 Tank tank;
 LevelSensor sensor;
-PumpController pump;
 GrafanaReporter grafana;
 JsonDocument config;
 
@@ -80,12 +78,6 @@ void handleApiStatus() {
     doc["sensor_ok"] = sensor.isOk();
     doc["uptime_sec"] = millis() / 1000;
 
-    // Pump info
-    doc["pump_enabled"] = pump.isEnabled();
-    doc["pump_on"] = pump.isOn();
-    doc["pump_state"] = pump.getStateString();
-    doc["pump_runtime_sec"] = pump.getTotalRuntimeSec();
-
     // WiFi info
     doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -124,23 +116,6 @@ void handleApiConfig() {
         delay(500);
         ESP.restart();
     }
-}
-
-void handleApiPump() {
-    String action = server.arg("action");
-
-    if (action == "on") {
-        pump.manualOn();
-    } else if (action == "off") {
-        pump.manualOff();
-    } else if (action == "auto") {
-        pump.resetToAuto();
-    } else {
-        server.send(400, "text/plain", "Invalid action. Use: on, off, auto");
-        return;
-    }
-
-    server.send(200, "text/plain", "OK");
 }
 
 void handleRestart() {
@@ -195,12 +170,6 @@ void setup() {
         DBG_ERRORLN("[WARN] Sensor init failed - will retry");
     }
 
-    // Pump controller
-    DBG_INFOLN("\n[INFO] Configuring pump...");
-    JsonObject pumpCfg = config["pump"];
-    pump.loadFromConfig(pumpCfg);
-    pump.init();
-
     // Grafana
     DBG_INFOLN("\n[INFO] Configuring Grafana...");
     JsonObject grafanaCfg = config["grafana"];
@@ -215,7 +184,6 @@ void setup() {
     server.on("/api/status", HTTP_GET, handleApiStatus);
     server.on("/api/config", HTTP_GET, handleApiConfig);
     server.on("/api/config", HTTP_POST, handleApiConfig);
-    server.on("/api/pump", HTTP_POST, handleApiPump);
     server.on("/restart", HTTP_POST, handleRestart);
 
     server.onNotFound([]() {
@@ -242,19 +210,9 @@ void loop() {
 
     // Read sensor (respects internal interval)
     if (sensor.update()) {
-        // Update pump controller with new level
-        pump.update(sensor.getLevel());
-
         // Send to Grafana
         if (grafana.shouldSend()) {
-            String fields = sensor.getMeasurementsString();
-
-            // Append pump data if enabled
-            if (pump.isEnabled()) {
-                fields += "," + pump.getGrafanaFields();
-            }
-
-            grafana.send(fields);
+            grafana.send(sensor.getMeasurementsString());
         }
     }
 

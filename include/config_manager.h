@@ -79,16 +79,6 @@ inline void createDefaultConfig() {
     tank["empty_distance_cm"] = 145;
     tank["full_distance_cm"] = 10;
 
-    JsonObject pump = doc["pump"].to<JsonObject>();
-    pump["enabled"] = false;
-    pump["relay_pin"] = 26;
-    pump["active_low"] = false;
-    pump["auto_mode"] = true;
-    pump["low_threshold"] = 20;
-    pump["high_threshold"] = 90;
-    pump["hysteresis"] = 5;
-    pump["timeout_min"] = 30;
-
     JsonObject grafana = doc["grafana"].to<JsonObject>();
     grafana["url"] = "";
     grafana["token"] = "";
