@@ -1,0 +1,27 @@
+{
+  "device_name": "cist-01",
+  "wifi_ssid": "YOUR_SSID",
+  "wifi_pass": "YOUR_PASS",
+
+  "sensor": {
+    "trigger_pin": 5,
+    "echo_pin": 18,
+    "samples": 5,
+    "read_interval_sec": 10
+  },
+
+  "tank": {
+    "shape": "cylindrical",
+    "height_cm": 150,
+    "diameter_cm": 120,
+    "capacity_liters": 0,
+    "empty_distance_cm": 145,
+    "full_distance_cm": 10
+  },
+
+  "grafana": {
+    "url": "http://grafana.altermundi.net:8086/write?db=cto",
+    "token": "token:YOUR_TOKEN",
+    "send_interval_sec": 10
+  }
+}

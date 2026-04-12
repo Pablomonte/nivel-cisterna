@@ -10,23 +10,6 @@ enum TankShape {
     TANK_RECTANGULAR
 };
 
-/**
- * Tank geometry and level calculations.
- * 
- * The ultrasonic sensor is mounted at the top of the tank, pointing down.
- * It measures the distance to the water surface.
- * 
- *   Sensor ──┐
- *            │  ← empty_distance_cm (sensor to bottom when empty)
- *            │
- *   Water ───┤  ← distance reading
- *   ~~~~~~~~ │
- *   ~~~~~~~~ │  ← water column height = empty_distance - distance
- *   ~~~~~~~~ │
- *   Bottom ──┘
- * 
- * Level % = (water_height / tank_height) * 100
- */
 class Tank {
 private:
     TankShape shape;
@@ -34,62 +17,89 @@ private:
     float diameter_cm;
     float width_cm;
     float length_cm;
-    float capacityOverride_liters;  // 0 = auto-calculate
+    float capacityOverride_liters;
+    float emptyDistance_cm;
+    float fullDistance_cm;
 
-    // Sensor calibration
-    float emptyDistance_cm;   // Distance reading when tank is empty
-    float fullDistance_cm;    // Distance reading when tank is full
-
-public:
-    Tank() : shape(TANK_CYLINDRICAL), height_cm(150), diameter_cm(120),
-             width_cm(0), length_cm(0), capacityOverride_liters(0),
-             emptyDistance_cm(145), fullDistance_cm(10) {}
-
-    void loadFromConfig(JsonObject cfg) {
-        const char* shapeStr = cfg["shape"] | "cylindrical";
-        if (strcmp(shapeStr, "rectangular") == 0) {
-            shape = TANK_RECTANGULAR;
-        } else {
-            shape = TANK_CYLINDRICAL;
-        }
-
-        height_cm = cfg["height_cm"] | 150.0f;
-        diameter_cm = cfg["diameter_cm"] | 120.0f;
-        width_cm = cfg["width_cm"] | 0.0f;
-        length_cm = cfg["length_cm"] | 0.0f;
-        capacityOverride_liters = cfg["capacity_liters"] | 0.0f;
-        emptyDistance_cm = cfg["empty_distance_cm"] | 145.0f;
-        fullDistance_cm = cfg["full_distance_cm"] | 10.0f;
-
-        DBG_INFO("[Tank] %s h=%.0f empty=%.0f full=%.0f\n",
-                 shapeStr, height_cm, emptyDistance_cm, fullDistance_cm);
+    void setSafeDefaults() {
+        shape = TANK_CYLINDRICAL;
+        height_cm = 150.0f;
+        diameter_cm = 120.0f;
+        width_cm = 0.0f;
+        length_cm = 0.0f;
+        capacityOverride_liters = 0.0f;
+        emptyDistance_cm = 145.0f;
+        fullDistance_cm = 10.0f;
     }
 
-    /**
-     * Convert raw sensor distance to water level percentage.
-     * Returns 0-100 (clamped).
-     */
-    float distanceToLevel(float distance_cm) {
+public:
+    Tank() {
+        setSafeDefaults();
+    }
+
+    void loadFromConfig(JsonObject cfg) {
+        setSafeDefaults();
+
+        const char* shapeStr = cfg["shape"] | "cylindrical";
+        shape = strcmp(shapeStr, "rectangular") == 0 ? TANK_RECTANGULAR : TANK_CYLINDRICAL;
+
+        height_cm = cfg["height_cm"] | height_cm;
+        diameter_cm = cfg["diameter_cm"] | diameter_cm;
+        width_cm = cfg["width_cm"] | width_cm;
+        length_cm = cfg["length_cm"] | length_cm;
+        capacityOverride_liters = cfg["capacity_liters"] | capacityOverride_liters;
+        emptyDistance_cm = cfg["empty_distance_cm"] | emptyDistance_cm;
+        fullDistance_cm = cfg["full_distance_cm"] | fullDistance_cm;
+
+        if (height_cm <= 0) {
+            DBG_ERRORLN("[Tank] Invalid height, using default 150 cm");
+            height_cm = 150.0f;
+        }
+
+        if (capacityOverride_liters <= 0) {
+            if (shape == TANK_CYLINDRICAL && diameter_cm <= 0) {
+                DBG_ERRORLN("[Tank] Invalid diameter, using default 120 cm");
+                diameter_cm = 120.0f;
+            }
+            if (shape == TANK_RECTANGULAR && (width_cm <= 0 || length_cm <= 0)) {
+                DBG_ERRORLN("[Tank] Invalid rectangular dimensions, using defaults");
+                width_cm = 100.0f;
+                length_cm = 100.0f;
+            }
+        }
+
         if (emptyDistance_cm <= fullDistance_cm) {
-            DBG_ERROR("[Tank] Bad calibration: empty <= full\n");
-            return -1;
+            DBG_ERRORLN("[Tank] Invalid calibration, using defaults");
+            emptyDistance_cm = 145.0f;
+            fullDistance_cm = 10.0f;
+        }
+
+        DBG_INFO("[Tank] %s h=%.0f empty=%.0f full=%.0f\n",
+                 shape == TANK_RECTANGULAR ? "rectangular" : "cylindrical",
+                 height_cm, emptyDistance_cm, fullDistance_cm);
+    }
+
+    float distanceToLevel(float distance_cm) const {
+        if (distance_cm < 0 || emptyDistance_cm <= fullDistance_cm) {
+            return -1.0f;
         }
 
         float level = (emptyDistance_cm - distance_cm) /
-                       (emptyDistance_cm - fullDistance_cm) * 100.0f;
+                      (emptyDistance_cm - fullDistance_cm) * 100.0f;
         return constrain(level, 0.0f, 100.0f);
     }
 
-    /**
-     * Calculate volume in liters from level percentage.
-     */
-    float levelToVolume(float levelPercent) {
+    float levelToVolume(float levelPercent) const {
+        if (levelPercent < 0.0f) {
+            return -1.0f;
+        }
+
         if (capacityOverride_liters > 0) {
             return capacityOverride_liters * (levelPercent / 100.0f);
         }
 
         float waterHeight_cm = height_cm * (levelPercent / 100.0f);
-        float volume_cm3 = 0;
+        float volume_cm3 = 0.0f;
 
         if (shape == TANK_CYLINDRICAL) {
             float radius = diameter_cm / 2.0f;
@@ -98,13 +108,10 @@ public:
             volume_cm3 = width_cm * length_cm * waterHeight_cm;
         }
 
-        return volume_cm3 / 1000.0f;  // cm³ → liters
+        return volume_cm3 / 1000.0f;
     }
 
-    /**
-     * Get total tank capacity in liters.
-     */
-    float getCapacity() {
+    float getCapacity() const {
         if (capacityOverride_liters > 0) return capacityOverride_liters;
         return levelToVolume(100.0f);
     }

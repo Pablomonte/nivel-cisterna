@@ -5,24 +5,12 @@
 #include <ArduinoJson.h>
 #include "debug.h"
 
-/**
- * Pump controller with hysteresis and safety timeout.
- * 
- * Behavior:
- *   - Turns ON  when level drops below (lowThreshold - hysteresis)
- *   - Turns OFF when level rises above (highThreshold + hysteresis)
- *   - Emergency shutoff if pump runs longer than timeout
- *   - Manual override from web interface
- * 
- *      OFF zone          HYSTERESIS          ON zone
- *   ◄──────────────┤  low_threshold  ├──────────────►
- */
 enum PumpState {
-    PUMP_OFF,
-    PUMP_ON,
-    PUMP_MANUAL_ON,
-    PUMP_MANUAL_OFF,
-    PUMP_TIMEOUT    // Safety shutoff
+    PUMP_OFF = 0,
+    PUMP_ON = 1,
+    PUMP_MANUAL_ON = 2,
+    PUMP_MANUAL_OFF = 3,
+    PUMP_TIMEOUT = 4
 };
 
 class PumpController {
@@ -39,18 +27,35 @@ private:
 
     PumpState state;
     unsigned long pumpStartTime;
-    unsigned long totalRuntimeMs;  // Accumulated pump runtime
+    unsigned long totalRuntimeMs;
 
     void setRelay(bool on) {
         bool pinState = activeLow ? !on : on;
         digitalWrite(relayPin, pinState);
     }
 
+    void startPump(PumpState nextState) {
+        if (!isOn()) {
+            pumpStartTime = millis();
+        }
+        setRelay(true);
+        state = nextState;
+    }
+
+    void stopPump(PumpState nextState) {
+        if (isOn() && pumpStartTime > 0) {
+            totalRuntimeMs += millis() - pumpStartTime;
+        }
+        pumpStartTime = 0;
+        setRelay(false);
+        state = nextState;
+    }
+
 public:
     PumpController() : enabled(false), relayPin(26), activeLow(false),
-                        autoMode(true), lowThreshold(20), highThreshold(90),
-                        hysteresis(5), timeoutMs(30UL * 60 * 1000),
-                        state(PUMP_OFF), pumpStartTime(0), totalRuntimeMs(0) {}
+                       autoMode(true), lowThreshold(20.0f), highThreshold(90.0f),
+                       hysteresis(5.0f), timeoutMs(30UL * 60UL * 1000UL),
+                       state(PUMP_OFF), pumpStartTime(0), totalRuntimeMs(0) {}
 
     void loadFromConfig(JsonObject cfg) {
         enabled = cfg["enabled"] | false;
@@ -62,9 +67,10 @@ public:
         hysteresis = cfg["hysteresis"] | 5.0f;
         timeoutMs = (cfg["timeout_min"] | 30) * 60UL * 1000UL;
 
-        DBG_INFO("[Pump] %s pin=%d low=%.0f high=%.0f hyst=%.0f\n",
+        DBG_INFO("[Pump] %s pin=%d low=%.0f high=%.0f hyst=%.0f auto=%s\n",
                  enabled ? "enabled" : "disabled",
-                 relayPin, lowThreshold, highThreshold, hysteresis);
+                 relayPin, lowThreshold, highThreshold, hysteresis,
+                 autoMode ? "yes" : "no");
     }
 
     bool init() {
@@ -72,91 +78,81 @@ public:
         pinMode(relayPin, OUTPUT);
         setRelay(false);
         state = PUMP_OFF;
+        pumpStartTime = 0;
         DBG_INFO("[Pump] Init OK, relay pin %d\n", relayPin);
         return true;
     }
 
-    /**
-     * Update pump state based on current level.
-     * Call this after each sensor reading.
-     */
     void update(float levelPercent) {
-        if (!enabled || !autoMode) return;
+        if (!enabled) return;
 
-        // Safety timeout check
-        if (state == PUMP_ON && pumpStartTime > 0) {
-            if (millis() - pumpStartTime > timeoutMs) {
-                DBG_ERROR("[Pump] TIMEOUT! Shutting off after %lu min\n",
-                          timeoutMs / 60000);
-                totalRuntimeMs += millis() - pumpStartTime;
-                setRelay(false);
-                state = PUMP_TIMEOUT;
-                return;
-            }
+        if (state == PUMP_ON && pumpStartTime > 0 && millis() - pumpStartTime > timeoutMs) {
+            DBG_ERROR("[Pump] TIMEOUT after %lu min\n", timeoutMs / 60000UL);
+            stopPump(PUMP_TIMEOUT);
+            return;
         }
+
+        if (!autoMode) return;
+        if (levelPercent < 0.0f || levelPercent > 100.0f) return;
 
         switch (state) {
             case PUMP_OFF:
-                if (levelPercent < (lowThreshold - hysteresis)) {
-                    DBG_INFO("[Pump] ON (level=%.1f < %.1f)\n",
+                if (levelPercent <= (lowThreshold - hysteresis)) {
+                    DBG_INFO("[Pump] ON (level=%.1f <= %.1f)\n",
                              levelPercent, lowThreshold - hysteresis);
-                    setRelay(true);
-                    pumpStartTime = millis();
-                    state = PUMP_ON;
+                    startPump(PUMP_ON);
                 }
                 break;
 
             case PUMP_ON:
-                if (levelPercent > (highThreshold + hysteresis)) {
-                    DBG_INFO("[Pump] OFF (level=%.1f > %.1f)\n",
+                if (levelPercent >= (highThreshold + hysteresis)) {
+                    DBG_INFO("[Pump] OFF (level=%.1f >= %.1f)\n",
                              levelPercent, highThreshold + hysteresis);
-                    totalRuntimeMs += millis() - pumpStartTime;
-                    setRelay(false);
-                    state = PUMP_OFF;
+                    stopPump(PUMP_OFF);
                 }
                 break;
 
             case PUMP_TIMEOUT:
-                // Stay in timeout until manual reset
-                break;
-
             case PUMP_MANUAL_ON:
             case PUMP_MANUAL_OFF:
-                // Manual override - don't change automatically
                 break;
         }
     }
 
-    // Manual controls (from web interface)
     void manualOn() {
         if (!enabled) return;
-        setRelay(true);
-        pumpStartTime = millis();
-        state = PUMP_MANUAL_ON;
-        DBG_INFO("[Pump] Manual ON\n");
+        autoMode = false;
+        startPump(PUMP_MANUAL_ON);
+        DBG_INFOLN("[Pump] Manual ON");
     }
 
     void manualOff() {
         if (!enabled) return;
-        if (pumpStartTime > 0) totalRuntimeMs += millis() - pumpStartTime;
-        setRelay(false);
-        state = PUMP_MANUAL_OFF;
-        DBG_INFO("[Pump] Manual OFF\n");
+        autoMode = false;
+        stopPump(PUMP_MANUAL_OFF);
+        DBG_INFOLN("[Pump] Manual OFF");
     }
 
     void resetToAuto() {
         if (!enabled) return;
-        setRelay(false);
-        state = PUMP_OFF;
+        stopPump(PUMP_OFF);
         autoMode = true;
-        DBG_INFO("[Pump] Reset to AUTO\n");
+        DBG_INFOLN("[Pump] Reset to AUTO");
     }
 
-    // Status
     bool isOn() const { return state == PUMP_ON || state == PUMP_MANUAL_ON; }
     bool isEnabled() const { return enabled; }
+    bool isAutoMode() const { return autoMode; }
     PumpState getState() const { return state; }
-    unsigned long getTotalRuntimeSec() const { return totalRuntimeMs / 1000; }
+    int getStateCode() const { return static_cast<int>(state); }
+
+    unsigned long getTotalRuntimeSec() const {
+        unsigned long runtimeMs = totalRuntimeMs;
+        if (isOn() && pumpStartTime > 0) {
+            runtimeMs += millis() - pumpStartTime;
+        }
+        return runtimeMs / 1000UL;
+    }
 
     const char* getStateString() const {
         switch (state) {
@@ -169,10 +165,12 @@ public:
         }
     }
 
-    String getGrafanaFields() {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "pump_state=%d,pump_runtime=%lu",
-                 isOn() ? 1 : 0, getTotalRuntimeSec());
+    String getGrafanaFields() const {
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "pump_enabled=%di,pump_on=%di,pump_state_code=%di,pump_runtime_sec=%lui,pump_auto_mode=%di",
+                 enabled ? 1 : 0, isOn() ? 1 : 0, getStateCode(),
+                 getTotalRuntimeSec(), autoMode ? 1 : 0);
         return String(buf);
     }
 };
