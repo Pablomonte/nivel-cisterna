@@ -23,5 +23,15 @@
     "url": "http://grafana.altermundi.net:8086/write?db=cto",
     "token": "token:YOUR_TOKEN",
     "send_interval_sec": 10
+  },
+
+  "telegram": {
+    "enabled": false,
+    "chat_id": "",
+    "bot_token": "",
+    "low_level_threshold_pct": 15,
+    "recovery_threshold_pct": 30,
+    "sensor_failure_threshold": 3,
+    "cooldown_sec": 900
   }
 }

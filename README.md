@@ -32,7 +32,22 @@ pio device monitor -b 115200
 
 ## Configuracion
 
-El proyecto incluye un ejemplo en [data/config.json](/home/pablo/repos/nivel-cisterna/data/config.json). Los campos sensibles (`wifi_pass`, `grafana.token`, `admin.password`, `telegram.bot_token`) se aceptan por API, pero al guardarse quedan en NVS y no vuelven a exponerse por `/api/config`.
+El proyecto incluye un ejemplo en [data/config.json.example](data/config.json.example). El `data/config.json` real esta gitignored. Los campos sensibles (`wifi_pass`, `grafana.token`, `admin.password`, `telegram.bot_token`) se aceptan por API, pero al guardarse quedan en NVS y no vuelven a exponerse por `/api/config`.
+
+### Provisioning local con `.env` (recomendado)
+
+Para no commitear secretos al repo, usar variables de entorno y el script de provisioning:
+
+```bash
+cp .env.example .env
+$EDITOR .env                    # llenar TELEGRAM_BOT_TOKEN, etc.
+./scripts/provision_config.sh   # mergea .env -> data/config.json
+pio run -e cisterna_dev -t uploadfs
+```
+
+Tanto `.env` como `data/config.json` estan en `.gitignore`. El script solo escribe los campos que estan seteados; lo demas se mantiene del JSON existente. Si `telegram.enabled=true`, el script exige `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
+
+Variables soportadas: `TELEGRAM_ENABLED`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `WIFI_SSID`, `WIFI_PASS`, `GRAFANA_URL`, `GRAFANA_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
 
 En el primer arranque, o si no hay `wifi_ssid`, el equipo levanta un AP WPA2 con:
 

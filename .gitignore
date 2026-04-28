@@ -17,6 +17,9 @@ build_reports/
 # Private credentials
 include/constants_private.h
 data/config.json
+.env
+*.env
+!.env.example
 
 # OS
 .DS_Store
