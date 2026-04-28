@@ -13,6 +13,7 @@ private:
 
     String getSecret(const char* key) {
         if (!ready) return "";
+        if (!prefs.isKey(key)) return "";
         return prefs.getString(key, "");
     }
 

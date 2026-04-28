@@ -1,0 +1,11 @@
+PlatformIO Test Runner para nivel-cisterna.
+
+Estos tests corren sobre `[env:native_test]` (host, sin ESP32) usando Unity.
+La logica testeada se duplica con std::string / tipos C++ estandar para no
+arrastrar dependencias de Arduino, ArduinoJson o ESP-IDF. Cada test
+verifica una regla concreta del firmware (ver comentarios en cada archivo).
+
+Ejecutar:
+  pio test -e native_test
+
+Mas info: https://docs.platformio.org/en/latest/advanced/unit-testing/index.html

@@ -178,6 +178,28 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     font-size: 0.72rem;
     text-align: center;
   }
+
+  .actions {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 440px;
+  }
+
+  .button-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    background: linear-gradient(180deg, rgba(14, 165, 233, 0.18), rgba(2, 132, 199, 0.1));
+    color: #e0f2fe;
+    text-decoration: none;
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -252,6 +274,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   </div>
 </div>
 
+<div class="actions">
+  <a class="button-link" href="/wifi">Administracion WiFi</a>
+</div>
+
 <div class="device-name" id="deviceName"></div>
 <div class="footer">nivel-cisterna <span id="fwVersion"></span></div>
 
@@ -323,6 +349,580 @@ updateData();
 setInterval(updateData, 5000);
 </script>
 
+</body>
+</html>
+)rawliteral";
+
+const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administracion WiFi</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-top: #04111d;
+    --bg-bottom: #0b1f33;
+    --panel: rgba(7, 23, 40, 0.88);
+    --panel-border: rgba(148, 163, 184, 0.22);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-strong: #0ea5e9;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+  }
+
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 35%),
+      linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 1rem;
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .header {
+    margin-bottom: 1rem;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    color: #bae6fd;
+    margin-bottom: 0.35rem;
+  }
+
+  .subtle {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 18px 36px rgba(2, 6, 23, 0.28);
+    backdrop-filter: blur(8px);
+  }
+
+  .card h2 {
+    font-size: 1rem;
+    margin-bottom: 0.85rem;
+    color: #e0f2fe;
+  }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+
+  .status-item {
+    background: rgba(2, 6, 23, 0.45);
+    border-radius: 12px;
+    padding: 0.85rem;
+    min-height: 72px;
+  }
+
+  .status-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+  }
+
+  .status-value {
+    font-size: 1rem;
+    font-weight: 600;
+    word-break: break-word;
+  }
+
+  form {
+    display: grid;
+    gap: 0.9rem;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.42rem;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  input[type="text"],
+  input[type="password"] {
+    width: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.72);
+    color: var(--text);
+    padding: 0.9rem 0.95rem;
+    font-size: 0.96rem;
+    outline: none;
+  }
+
+  input[type="text"]:focus,
+  input[type="password"]:focus {
+    border-color: rgba(56, 189, 248, 0.75);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  }
+
+  .hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.4;
+    margin-top: 0.35rem;
+  }
+
+  .inline-option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: #cbd5e1;
+    font-size: 0.88rem;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  button,
+  .nav-link {
+    border: none;
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .primary {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+    color: #082f49;
+  }
+
+  .secondary,
+  .nav-link {
+    background: rgba(15, 23, 42, 0.88);
+    color: #dbeafe;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .message {
+    display: none;
+    margin-top: 0.5rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .message.show { display: block; }
+  .message.ok { background: rgba(34, 197, 94, 0.12); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.25); }
+  .message.err { background: rgba(239, 68, 68, 0.12); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.25); }
+  .message.warn { background: rgba(245, 158, 11, 0.12); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.25); }
+
+  .network-list {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .network-item {
+    width: 100%;
+    text-align: left;
+    background: rgba(2, 6, 23, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    color: var(--text);
+  }
+
+  .network-item.selected {
+    border-color: rgba(56, 189, 248, 0.7);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+  }
+
+  .network-item strong {
+    display: block;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .network-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+
+  .badge.ok { background: rgba(34, 197, 94, 0.14); color: #bbf7d0; }
+  .badge.warn { background: rgba(245, 158, 11, 0.14); color: #fde68a; }
+
+  @media (max-width: 640px) {
+    .status-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .actions > * {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="header">
+    <h1>Administracion WiFi</h1>
+    <div class="subtle">Configura la red cliente del ESP32 y el nombre del dispositivo. El nombre del dispositivo tambien se usa como SSID del punto de acceso del equipo.</div>
+  </div>
+
+  <div class="card">
+    <h2>Estado actual</h2>
+    <div class="status-grid">
+      <div class="status-item">
+        <div class="status-label">Dispositivo / AP</div>
+        <div class="status-value" id="statusDevice">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Modo</div>
+        <div class="status-value" id="statusMode">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Red conectada</div>
+        <div class="status-value" id="statusConnected">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">IP activa</div>
+        <div class="status-value" id="statusIp">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">SSID configurado</div>
+        <div class="status-value" id="statusConfigured">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Password WiFi guardada</div>
+        <div class="status-value" id="statusPassword">--</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Configuracion</h2>
+    <form id="wifiForm">
+      <div>
+        <label for="deviceName">Nombre del dispositivo / SSID del AP</label>
+        <input id="deviceName" name="deviceName" type="text" maxlength="31" placeholder="cisterna-01">
+        <div class="hint">Maximo 31 caracteres. Se usa en el dashboard y como SSID del AP del equipo.</div>
+      </div>
+
+      <div>
+        <label for="wifiSsid">Red WiFi a conectar</label>
+        <input id="wifiSsid" name="wifiSsid" type="text" maxlength="32" placeholder="MiWiFi">
+        <div class="hint">Puedes escribirlo manualmente o tocar una red del escaneo. Si lo dejas vacio, el equipo queda solo en modo AP.</div>
+      </div>
+
+      <div>
+        <label for="wifiPass">Contraseña WiFi</label>
+        <input id="wifiPass" name="wifiPass" type="password" placeholder="Dejar vacio para conservar la actual">
+        <div class="hint">Completa este campo solo si quieres cambiarla. Para redes abiertas, marca la opcion de borrar password.</div>
+      </div>
+
+      <label class="inline-option">
+        <input id="clearPassword" type="checkbox">
+        <span>Borrar password WiFi guardada</span>
+      </label>
+
+      <div class="actions">
+        <button class="primary" type="submit">Guardar y reiniciar</button>
+        <button class="secondary" type="button" id="scanButton">Escanear redes</button>
+        <a class="nav-link" href="/">Volver al dashboard</a>
+      </div>
+    </form>
+    <div class="message" id="formMessage"></div>
+  </div>
+
+  <div class="card">
+    <h2>Redes detectadas</h2>
+    <div class="subtle" style="margin-bottom: 0.9rem;">Selecciona una red para completar el SSID automaticamente. El escaneo puede tardar unos segundos.</div>
+    <div class="network-list" id="networkList">
+      <div class="subtle">Todavia no se escanearon redes.</div>
+    </div>
+    <div class="message" id="scanMessage"></div>
+  </div>
+</div>
+
+<script>
+const elements = {
+  deviceName: document.getElementById('deviceName'),
+  wifiSsid: document.getElementById('wifiSsid'),
+  wifiPass: document.getElementById('wifiPass'),
+  clearPassword: document.getElementById('clearPassword'),
+  scanButton: document.getElementById('scanButton'),
+  networkList: document.getElementById('networkList'),
+  formMessage: document.getElementById('formMessage'),
+  scanMessage: document.getElementById('scanMessage'),
+  statusDevice: document.getElementById('statusDevice'),
+  statusMode: document.getElementById('statusMode'),
+  statusConnected: document.getElementById('statusConnected'),
+  statusIp: document.getElementById('statusIp'),
+  statusConfigured: document.getElementById('statusConfigured'),
+  statusPassword: document.getElementById('statusPassword')
+};
+
+let selectedSsid = '';
+let scanPollToken = 0;
+let scanStartedAt = 0;
+
+function showMessage(target, tone, text) {
+  target.className = 'message show ' + tone;
+  target.textContent = text;
+}
+
+function clearMessage(target) {
+  target.className = 'message';
+  target.textContent = '';
+}
+
+function normalizeNetworks(networks) {
+  const strongestBySsid = new Map();
+  (networks || []).forEach((network) => {
+    const ssid = network.ssid || '';
+    if (!ssid) return;
+    const current = strongestBySsid.get(ssid);
+    if (!current || (network.rssi || -999) > (current.rssi || -999)) {
+      strongestBySsid.set(ssid, network);
+    }
+  });
+
+  return Array.from(strongestBySsid.values()).sort((a, b) => (b.rssi || -999) - (a.rssi || -999));
+}
+
+function renderNetworks(networks) {
+  const list = normalizeNetworks(networks);
+
+  if (!list.length) {
+    elements.networkList.innerHTML = '<div class="subtle">No se encontraron redes visibles.</div>';
+    return;
+  }
+
+  elements.networkList.innerHTML = list.map((network) => {
+    const ssid = network.ssid || '';
+    const safeSsid = ssid
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    const selected = ssid === (selectedSsid || elements.wifiSsid.value) ? ' selected' : '';
+    const badges = [
+      network.connected ? '<span class="badge ok">Conectada</span>' : '',
+      network.configured ? '<span class="badge warn">Configurada</span>' : '',
+      network.secure ? '<span class="badge warn">Segura</span>' : '<span class="badge ok">Abierta</span>'
+    ].join('');
+
+    return `
+      <button class="network-item${selected}" type="button" data-ssid="${safeSsid}">
+        <strong>${safeSsid}</strong>
+        <div class="network-meta">
+          <span>RSSI ${network.rssi ?? '--'} dBm</span>
+          <span>Canal ${network.channel ?? '--'}</span>
+          ${badges}
+        </div>
+      </button>
+    `;
+  }).join('');
+
+  elements.networkList.querySelectorAll('.network-item').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedSsid = button.dataset.ssid || '';
+      elements.wifiSsid.value = selectedSsid;
+      renderNetworks(list);
+    });
+  });
+}
+
+function fillStatus(settings) {
+  const configuredSsid = settings.wifi_ssid || '';
+  const connectedSsid = settings.connected_ssid || '';
+
+  elements.statusDevice.textContent = settings.device_name || '--';
+  elements.statusMode.textContent = settings.wifi_mode || '--';
+  elements.statusConnected.textContent = connectedSsid || 'Sin enlace';
+  elements.statusIp.textContent = settings.ip || '--';
+  elements.statusConfigured.textContent = configuredSsid || 'Sin configurar';
+  elements.statusPassword.textContent = settings.wifi_pass_configured ? 'Si' : 'No';
+
+  elements.deviceName.value = settings.device_name || '';
+  elements.wifiSsid.value = configuredSsid;
+  selectedSsid = configuredSsid;
+}
+
+async function loadSettings() {
+  clearMessage(elements.formMessage);
+
+  const response = await fetch('/api/wifi/settings', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error('No se pudo cargar la configuracion WiFi');
+  }
+
+  const data = await response.json();
+  fillStatus(data);
+}
+
+async function scanNetworks() {
+  clearMessage(elements.scanMessage);
+  showMessage(elements.scanMessage, 'warn', 'Escaneando redes cercanas...');
+  elements.scanButton.disabled = true;
+  const currentToken = ++scanPollToken;
+  scanStartedAt = Date.now();
+
+  try {
+    const startResponse = await fetch('/api/wifi/scan', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+
+    if (!startResponse.ok && startResponse.status !== 202) {
+      throw new Error(await startResponse.text() || 'No se pudo iniciar el escaneo WiFi.');
+    }
+
+    await pollScanResult(currentToken, 0);
+  } catch (error) {
+    showMessage(elements.scanMessage, 'err', error.message || 'No se pudo escanear redes.');
+  } finally {
+    if (currentToken === scanPollToken) {
+      elements.scanButton.disabled = false;
+    }
+  }
+}
+
+async function pollScanResult(token, attempt) {
+  if (token !== scanPollToken) return;
+
+  const elapsedMs = Date.now() - scanStartedAt;
+  if (elapsedMs > 35000) {
+    throw new Error('El escaneo tardo demasiado y se cancelo.');
+  }
+
+  try {
+    const response = await fetch('/api/wifi/scan', { cache: 'no-store' });
+    const text = await response.text();
+    let data = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_) {
+      data = {};
+    }
+
+    if (!response.ok) {
+      throw new Error(text || 'No se pudo consultar el escaneo WiFi.');
+    }
+
+    if (data.status === 'running' || data.status === 'idle') {
+      const elapsed = data.started_ms_ago ? Math.round(data.started_ms_ago / 1000) : Math.round(elapsedMs / 1000);
+      const channelText = data.current_channel ? ` canal ${data.current_channel}` : '';
+      showMessage(elements.scanMessage, 'warn', `Escaneando redes cercanas... ${elapsed}s${channelText}`);
+      await delay(900);
+      return pollScanResult(token, attempt + 1);
+    }
+
+    if (data.status === 'failed') {
+      const reason = data.error === 'timeout'
+        ? 'El escaneo excedio el tiempo esperado.'
+        : data.error === 'channel_scan_failed'
+        ? 'Fallo el escaneo de uno de los canales WiFi.'
+        : data.error === 'scan_start_failed'
+        ? 'No se pudo iniciar el escaneo WiFi.'
+        : (data.error || 'El escaneo WiFi fallo.');
+      throw new Error(reason);
+    }
+
+    renderNetworks(data.networks || []);
+    showMessage(elements.scanMessage, 'ok', `Escaneo completo: ${data.count ?? 0} redes detectadas.`);
+  } catch (error) {
+    if (attempt < 25) {
+      await delay(1000);
+      return pollScanResult(token, attempt + 1);
+    }
+    throw error;
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+document.getElementById('wifiForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearMessage(elements.formMessage);
+
+  const payload = {
+    device_name: elements.deviceName.value.trim(),
+    wifi_ssid: elements.wifiSsid.value.trim()
+  };
+
+  if (elements.clearPassword.checked) {
+    payload.wifi_pass = '';
+  } else if (elements.wifiPass.value.length > 0) {
+    payload.wifi_pass = elements.wifiPass.value;
+  }
+
+  showMessage(elements.formMessage, 'warn', 'Guardando configuracion y reiniciando el equipo...');
+
+  try {
+    const response = await fetch('/api/wifi/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(await response.text() || 'No se pudo guardar la configuracion.');
+    }
+
+    const message = await response.text();
+    showMessage(elements.formMessage, 'ok', message || 'Configuracion guardada. Reiniciando...');
+  } catch (error) {
+    showMessage(elements.formMessage, 'err', error.message || 'No se pudo guardar la configuracion.');
+  }
+});
+
+elements.scanButton.addEventListener('click', scanNetworks);
+
+loadSettings().catch((error) => {
+  showMessage(elements.formMessage, 'err', error.message || 'No se pudo cargar el estado actual.');
+});
+</script>
 </body>
 </html>
 )rawliteral";

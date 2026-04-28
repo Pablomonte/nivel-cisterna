@@ -72,6 +72,16 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
         error = "device_name is required";
         return false;
     }
+    if (deviceName.length() > 31) {
+        error = "device_name must be 31 characters or fewer";
+        return false;
+    }
+
+    String wifiSsid = doc["wifi_ssid"] | "";
+    if (wifiSsid.length() > 32) {
+        error = "wifi_ssid must be 32 characters or fewer";
+        return false;
+    }
 
     JsonObjectConst sensor = doc["sensor"].as<JsonObjectConst>();
     int samples = sensor["samples"] | 5;
