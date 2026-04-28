@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "author": "nivel-cisterna",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic",
+      "top": -120,
+      "left": 200,
+      "attrs": { "distance": "60", "label": "JSN-SR04T (sim HC-SR04 compat)" }
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay",
+      "top": 80,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_pump",
+      "top": 80,
+      "left": 380,
+      "attrs": { "color": "red", "label": "PUMP" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 120,
+      "left": 360,
+      "attrs": { "value": "220" }
+    }
+  ],
+  "connections": [
+    [ "esp:5",   "ultrasonic:TRIG", "green",  [ "h0" ] ],
+    [ "esp:18",  "ultrasonic:ECHO", "yellow", [ "h0" ] ],
+    [ "esp:5V",  "ultrasonic:VCC",  "red",    [ "h0" ] ],
+    [ "esp:GND.1","ultrasonic:GND", "black",  [ "h0" ] ],
+
+    [ "esp:26",  "relay:IN",  "orange", [ "h0" ] ],
+    [ "esp:5V",  "relay:VCC", "red",    [ "h0" ] ],
+    [ "esp:GND.2","relay:GND","black",  [ "h0" ] ],
+
+    [ "relay:COM", "led_pump:A", "red",   [ "h0" ] ],
+    [ "led_pump:C","r1:1",       "black", [ "h0" ] ],
+    [ "r1:2",      "esp:GND.3",  "black", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}

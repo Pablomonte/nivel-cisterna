@@ -1,6 +1,6 @@
 # Nivel Cisterna
 
-Monitor de nivel de agua para cisterna con ESP32, sensor ultrasonico HC-SR04/JSN-SR04T, dashboard web embebido, reporte a Grafana/InfluxDB, alertas Telegram y control opcional de bomba.
+Monitor de nivel de agua para cisterna con ESP32, sensor ultrasonico waterproof JSN-SR04T, dashboard web embebido, reporte a Grafana/InfluxDB, alertas Telegram y control opcional de bomba.
 
 ## Funcionalidades
 
@@ -16,8 +16,8 @@ Monitor de nivel de agua para cisterna con ESP32, sensor ultrasonico HC-SR04/JSN
 
 | Componente | Pin ESP32 | Notas |
 |------------|-----------|-------|
-| Sensor Trig | GPIO 5 | HC-SR04 / JSN-SR04T |
-| Sensor Echo | GPIO 18 | HC-SR04 / JSN-SR04T |
+| Sensor Trig | GPIO 5 | JSN-SR04T (modulo + cabezal IP67) |
+| Sensor Echo | GPIO 18 | JSN-SR04T (modulo + cabezal IP67) |
 | Relay Bomba | GPIO 26 | Opcional, modulo 1CH |
 
 ## Compilacion

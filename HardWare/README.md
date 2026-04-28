@@ -1,21 +1,36 @@
 # Hardware - Nivel Cisterna
 
+## Sensor: JSN-SR04T (waterproof)
+
+Sensor ultrasonico industrial con cabezal IP67 separado por cable de ~2.5 m,
+ideal para cisternas y depositos. El modulo de control queda fuera del agua y
+solo el transductor sumergible mira hacia la superficie del liquido.
+
+- Voltaje: 5 V (VCC) / logica 5 V tolerada por GPIO ESP32 a traves de divisor
+  recomendado en ECHO si se va a operar mucho tiempo, opcional para pruebas.
+- Rango util: ~25 cm a 450 cm.
+- Angulo de cono: ~50 grados.
+- Misma interfaz Trig/Echo que el HC-SR04 (driver compartido).
+
 ## Esquema de Conexión
 
 ```
 ESP32 DevKit V1
 ┌──────────────────┐
-│              3V3 ├──── VCC Sensor
-│              GND ├──── GND Sensor
-│           GPIO 5 ├──── TRIG Sensor
-│          GPIO 18 ├──── ECHO Sensor (*)
+│              VIN ├──── VCC Modulo JSN-SR04T (5V)
+│              GND ├──── GND Modulo JSN-SR04T
+│           GPIO 5 ├──── TRIG Modulo JSN-SR04T
+│          GPIO 18 ├──── ECHO Modulo JSN-SR04T (*)
 │          GPIO 26 ├──── IN  Relay (opcional)
 │              VIN ├──── VCC Relay (5V)
 │              GND ├──── GND Relay
 └──────────────────┘
 
-(*) JSN-SR04T: si es modelo de 1 pin (modo 2), 
-    TRIG y ECHO van al mismo GPIO.
+Cabezal sumergible <── cable ── Modulo JSN-SR04T
+
+(*) Si se usa el modulo en modo 1-pin (variantes con jumper para
+    comunicacion serial), TRIG y ECHO no aplican y se debe usar el
+    driver UART correspondiente. Este firmware usa modo Trig/Echo.
 ```
 
 ## BOM (Bill of Materials)
@@ -23,16 +38,17 @@ ESP32 DevKit V1
 | Cant | Componente | Referencia |
 |------|-----------|------------|
 | 1 | ESP32 DevKit V1 | |
-| 1 | Sensor ultrasónico waterproof | JSN-SR04T (preferido) o HC-SR04 |
-| 1 | Módulo relay 1CH 5V | Opcional, para bomba |
+| 1 | Sensor ultrasonico waterproof | JSN-SR04T (modulo + cabezal IP67) |
+| 1 | Modulo relay 1CH 5V | Opcional, para bomba |
 | 1 | Fuente 5V 1A | USB o regulador |
-| - | Cableado, caja estanca | Para instalación exterior |
+| - | Cableado, caja estanca | Para instalacion exterior |
 
-## Notas de Instalación
+## Notas de Instalacion
 
-- El sensor debe montarse en la parte **superior** del tanque, apuntando hacia abajo
-- Mantener el sensor **vertical** y libre de obstrucciones
-- El JSN-SR04T es resistente al agua (IP67) - preferido para cisterna
-- El HC-SR04 NO es waterproof - requiere protección adicional
-- Distancia mínima de lectura: ~2 cm (JSN-SR04T) / ~2 cm (HC-SR04)
-- Distancia máxima: ~450 cm (JSN-SR04T) / ~400 cm (HC-SR04)
+- El cabezal sumergible va montado en la parte **superior** del tanque,
+  apuntando hacia abajo, por encima de la maxima posible altura del agua.
+- Mantener el sensor **vertical** y libre de obstrucciones.
+- El cabezal del JSN-SR04T es resistente al agua (IP67) - apto para cisterna.
+- Distancia minima de lectura: ~25 cm (zona ciega del transductor).
+- Distancia maxima: ~450 cm.
+- El modulo de control debe quedar **fuera del agua** en una caja estanca.
