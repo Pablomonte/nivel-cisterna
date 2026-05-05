@@ -8,7 +8,6 @@
 #include <time.h>
 #include "debug.h"
 #include "level_sensor.h"
-#include "pump_controller.h"
 
 static const char TELEGRAM_ROOT_CA[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
@@ -59,19 +58,11 @@ private:
     bool lowLevelAlertSent;
     bool sensorErrorActive;
     bool sensorErrorAlertSent;
-    bool pumpTimeoutActive;
-    bool pumpTimeoutAlertSent;
 
     unsigned long lastLowAttemptMs;
     unsigned long lastLowRecoveryAttemptMs;
     unsigned long lastSensorAttemptMs;
     unsigned long lastSensorRecoveryAttemptMs;
-    unsigned long lastPumpAttemptMs;
-    unsigned long lastPumpRecoveryAttemptMs;
-
-    bool hasValidTime() const {
-        return time(nullptr) > 1700000000;
-    }
 
     bool cooldownElapsed(unsigned long& lastAttemptMs) {
         unsigned long now = millis();
@@ -148,10 +139,8 @@ public:
                          sensorFailureThreshold(3), cooldownMs(15UL * 60UL * 1000UL),
                          lowLevelActive(false), lowLevelAlertSent(false),
                          sensorErrorActive(false), sensorErrorAlertSent(false),
-                         pumpTimeoutActive(false), pumpTimeoutAlertSent(false),
                          lastLowAttemptMs(0), lastLowRecoveryAttemptMs(0),
-                         lastSensorAttemptMs(0), lastSensorRecoveryAttemptMs(0),
-                         lastPumpAttemptMs(0), lastPumpRecoveryAttemptMs(0) {}
+                         lastSensorAttemptMs(0), lastSensorRecoveryAttemptMs(0) {}
 
     void loadFromConfig(JsonObject cfg, const char* device) {
         enabled = cfg["enabled"] | false;
@@ -171,7 +160,23 @@ public:
         return enabled && chatId.length() > 0 && botToken.length() > 0;
     }
 
-    void update(const LevelSensor& sensor, const PumpController& pump) {
+    bool hasValidTime() const {
+        return time(nullptr) > 1700000000;
+    }
+
+    void saveToRtc(bool& outLow, bool& outSensorFail) const {
+        outLow = lowLevelAlertSent;
+        outSensorFail = sensorErrorAlertSent;
+    }
+
+    void restoreFromRtc(bool low, bool sensorFail) {
+        lowLevelAlertSent = low;
+        lowLevelActive = low;
+        sensorErrorAlertSent = sensorFail;
+        sensorErrorActive = sensorFail;
+    }
+
+    void update(const LevelSensor& sensor) {
         if (!isConfigured()) return;
 
         float level = sensor.getLevel();
@@ -218,23 +223,6 @@ public:
             sensorErrorAlertSent = false;
         }
 
-        bool pumpTimeoutCondition = pump.getState() == PUMP_TIMEOUT;
-        if (pumpTimeoutCondition) {
-            pumpTimeoutActive = true;
-            if (!pumpTimeoutAlertSent) {
-                String message = "[" + deviceName + "] Bomba en timeout de seguridad";
-                if (sendMessage(message, lastPumpAttemptMs)) {
-                    pumpTimeoutAlertSent = true;
-                }
-            }
-        } else if (pumpTimeoutActive) {
-            if (pumpTimeoutAlertSent) {
-                String message = "[" + deviceName + "] Bomba recuperada";
-                sendMessage(message, lastPumpRecoveryAttemptMs);
-            }
-            pumpTimeoutActive = false;
-            pumpTimeoutAlertSent = false;
-        }
     }
 };
 

@@ -17,6 +17,7 @@ private:
     int triggerPin;
     int echoPin;
     int numSamples;
+    float offsetCm;
     unsigned long readIntervalMs;
     unsigned long lastReadTime;
     unsigned long lastSuccessfulReadTime;
@@ -86,25 +87,27 @@ private:
     }
 
 public:
-    LevelSensor() : triggerPin(5), echoPin(18), numSamples(5),
+    LevelSensor() : triggerPin(5), echoPin(18), numSamples(5), offsetCm(0.0f),
                     readIntervalMs(10000), lastReadTime(0), lastSuccessfulReadTime(0),
                     lastDistance_cm(-1.0f), lastLevel(-1.0f), lastVolume(-1.0f),
                     lastSpread_cm(-1.0f), sensorOk(false), consecutiveFailures(0),
                     tank(nullptr) {}
 
     void setTank(Tank* t) { tank = t; }
+    void resetReadTimer() { lastReadTime = 0; }
 
     void loadFromConfig(JsonObject cfg) {
         triggerPin = cfg["trigger_pin"] | 5;
         echoPin = cfg["echo_pin"] | 18;
         numSamples = cfg["samples"] | 5;
+        offsetCm = cfg["offset_cm"] | 0.0f;
         readIntervalMs = (cfg["read_interval_sec"] | 10) * 1000UL;
 
         if (numSamples < 1) numSamples = 1;
         if (numSamples > MAX_SENSOR_SAMPLES) numSamples = MAX_SENSOR_SAMPLES;
 
-        DBG_INFO("[Sensor] trig=%d echo=%d samples=%d interval=%lums\n",
-                 triggerPin, echoPin, numSamples, readIntervalMs);
+        DBG_INFO("[Sensor] trig=%d echo=%d samples=%d interval=%lums offset=%.1fcm\n",
+                 triggerPin, echoPin, numSamples, readIntervalMs, offsetCm);
     }
 
     bool init() {
@@ -146,6 +149,9 @@ public:
         sensorOk = true;
         consecutiveFailures = 0;
         lastSuccessfulReadTime = now;
+
+        distance += offsetCm;
+        if (distance < 0) distance = 0;
         lastDistance_cm = distance;
 
         if (tank) {
@@ -165,6 +171,7 @@ public:
     float getLevel() const { return lastLevel; }
     float getVolume() const { return lastVolume; }
     float getSpreadCm() const { return lastSpread_cm; }
+    float getOffsetCm() const { return offsetCm; }
     bool isOk() const { return sensorOk; }
     int getConsecutiveFailures() const { return consecutiveFailures; }
     unsigned long getReadInterval() const { return readIntervalMs; }

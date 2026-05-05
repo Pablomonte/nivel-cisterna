@@ -254,23 +254,12 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="status-value"><span id="spreadVal">--</span> cm</div>
   </div>
   <div class="status-row">
-    <div class="status-label">Bomba</div>
-    <div class="status-value">
-      <span class="dot" id="pumpDot"></span>
-      <span id="pumpState">--</span>
-    </div>
-  </div>
-  <div class="status-row">
-    <div class="status-label">Modo bomba</div>
-    <div class="status-value" id="pumpMode">--</div>
-  </div>
-  <div class="status-row">
-    <div class="status-label">Runtime bomba</div>
-    <div class="status-value"><span id="pumpRuntime">--</span> s</div>
-  </div>
-  <div class="status-row">
     <div class="status-label">WiFi</div>
     <div class="status-value" id="wifiState">--</div>
+  </div>
+  <div class="status-row">
+    <div class="status-label">Energia</div>
+    <div class="status-value" id="powerMode">--</div>
   </div>
 </div>
 
@@ -321,27 +310,19 @@ function updateData() {
         d.sensor_spread_cm >= 0 ? d.sensor_spread_cm.toFixed(1) : '--';
       setDot('sensorDot', d.sensor_ok ? 'ok' : 'err');
 
-      document.getElementById('pumpState').textContent = d.pump_state || '--';
-      document.getElementById('pumpMode').textContent = d.pump_auto_mode ? 'AUTO' : 'MANUAL';
-      document.getElementById('pumpRuntime').textContent = d.pump_runtime_sec ?? '--';
-
-      if (d.pump_state === 'timeout') {
-        setDot('pumpDot', 'err');
-      } else if (d.pump_on) {
-        setDot('pumpDot', 'ok');
-      } else {
-        setDot('pumpDot', 'warn');
-      }
-
       document.getElementById('wifiState').textContent =
         d.wifi_connected ? (d.ip || 'conectado') : (d.wifi_mode || 'sin enlace');
 
       document.getElementById('deviceName').textContent = d.device || '';
       document.getElementById('fwVersion').textContent = d.version || '';
+
+      const pm = d.power_mode === 'battery'
+        ? 'Bateria (ciclo #' + (d.boot_count ?? '--') + ')'
+        : 'Normal';
+      document.getElementById('powerMode').textContent = pm;
     })
     .catch(() => {
       setDot('sensorDot', 'err');
-      setDot('pumpDot', 'warn');
     });
 }
 
@@ -466,7 +447,9 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   }
 
   input[type="text"],
-  input[type="password"] {
+  input[type="password"],
+  input[type="number"],
+  select {
     width: 100%;
     border: 1px solid rgba(148, 163, 184, 0.24);
     border-radius: 12px;
@@ -475,10 +458,13 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     padding: 0.9rem 0.95rem;
     font-size: 0.96rem;
     outline: none;
+    appearance: none;
   }
 
   input[type="text"]:focus,
-  input[type="password"]:focus {
+  input[type="password"]:focus,
+  input[type="number"]:focus,
+  select:focus {
     border-color: rgba(56, 189, 248, 0.75);
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
   }
@@ -488,6 +474,39 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     font-size: 0.82rem;
     line-height: 1.4;
     margin-top: 0.35rem;
+  }
+
+  .pwd-wrap {
+    position: relative;
+  }
+
+  .pwd-wrap input {
+    padding-right: 3rem;
+  }
+
+  .pwd-toggle {
+    position: absolute;
+    right: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+    border-radius: 10px;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .pwd-toggle:hover {
+    color: var(--text);
+    border-color: rgba(56, 189, 248, 0.4);
+  }
+
+  .hidden {
+    display: none !important;
   }
 
   .inline-option {
@@ -653,8 +672,11 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
 
       <div>
         <label for="wifiPass">Contraseña WiFi</label>
-        <input id="wifiPass" name="wifiPass" type="password" placeholder="Dejar vacio para conservar la actual">
-        <div class="hint">Completa este campo solo si quieres cambiarla. Para redes abiertas, marca la opcion de borrar password.</div>
+        <div class="pwd-wrap">
+          <input id="wifiPass" name="wifiPass" type="password" placeholder="Dejar vacio para conservar la actual" minlength="8" maxlength="63">
+          <button type="button" class="pwd-toggle" data-target="wifiPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+        <div class="hint">8-63 caracteres (WPA2). Completa solo si quieres cambiarla. Para redes abiertas, marca la opcion de borrar password.</div>
       </div>
 
       <label class="inline-option">
@@ -679,6 +701,123 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     </div>
     <div class="message" id="scanMessage"></div>
   </div>
+
+  <div class="card">
+    <h2>Acceso admin</h2>
+    <div class="subtle" style="margin-bottom: 0.9rem;">Cambia la contraseña usada por el dashboard y la API. Si no hay una configurada, se usa la derivada del MAC (cisterna-XXXXXX).</div>
+    <form id="adminPwdForm">
+      <div id="currentPwdRow">
+        <label for="currentAdminPass">Contraseña actual</label>
+        <div class="pwd-wrap">
+          <input id="currentAdminPass" type="password" autocomplete="current-password" minlength="8" maxlength="64">
+          <button type="button" class="pwd-toggle" data-target="currentAdminPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+        <div class="hint">Si nunca configuraste una, dejala vacia (se acepta solo en el primer cambio).</div>
+      </div>
+      <div>
+        <label for="newAdminPass">Nueva contraseña</label>
+        <div class="pwd-wrap">
+          <input id="newAdminPass" type="password" autocomplete="new-password" minlength="8" maxlength="64" required>
+          <button type="button" class="pwd-toggle" data-target="newAdminPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+        <div class="hint">8 a 64 caracteres.</div>
+      </div>
+      <div>
+        <label for="confirmAdminPass">Confirmar nueva</label>
+        <div class="pwd-wrap">
+          <input id="confirmAdminPass" type="password" autocomplete="new-password" minlength="8" maxlength="64" required>
+          <button type="button" class="pwd-toggle" data-target="confirmAdminPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Cambiar contraseña</button>
+      </div>
+    </form>
+    <div class="message" id="adminPwdMessage"></div>
+  </div>
+
+  <div class="card">
+    <h2>Calibracion del sensor</h2>
+    <div class="subtle" style="margin-bottom: 0.9rem;">
+      Lectura actual: <strong id="liveDistance">--</strong> cm
+      (nivel <strong id="liveLevel">--</strong>%).
+      Ajusta los topes y el offset; los cambios se aplican sin reiniciar.
+    </div>
+    <form id="sensorCalForm">
+      <div>
+        <label for="emptyDistance">Distancia "tanque vacio" (cm)</label>
+        <input id="emptyDistance" name="emptyDistance" type="number" step="0.1" min="1" max="400" required>
+        <div class="hint">Distancia que mide el sensor cuando el tanque esta vacio (0%).</div>
+      </div>
+      <div>
+        <label for="fullDistance">Distancia "tanque lleno" (cm)</label>
+        <input id="fullDistance" name="fullDistance" type="number" step="0.1" min="0" max="400" required>
+        <div class="hint">Distancia que mide el sensor cuando el tanque esta lleno (100%). Debe ser menor que la de vacio.</div>
+      </div>
+      <div>
+        <label for="sensorOffset">Offset del sensor (cm)</label>
+        <input id="sensorOffset" name="sensorOffset" type="number" step="0.1" min="-50" max="50" required>
+        <div class="hint">Correccion fija sumada a cada lectura. Usalo para compensar montaje del sensor (-50 a +50).</div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Guardar calibracion</button>
+      </div>
+    </form>
+    <div class="message" id="sensorCalMessage"></div>
+  </div>
+
+  <div class="card">
+    <h2>Modo de energia</h2>
+    <div class="subtle" style="margin-bottom: 0.9rem;">
+      Controla como gestiona la energia el dispositivo. El cambio se aplica al reiniciar.
+    </div>
+    <form id="powerForm">
+      <div>
+        <label for="powerMode">Modo</label>
+        <select id="powerMode" name="powerMode">
+          <option value="normal">Normal — siempre encendido (corriente electrica)</option>
+          <option value="battery">Bateria — ciclos de deep sleep (~10µA dormido)</option>
+        </select>
+        <div class="hint" id="modeHintNormal">
+          El dispositivo permanece activo, el servidor web esta disponible en todo momento y el WiFi se mantiene conectado. Reconexion automatica cada cierta cantidad de segundos si pierde la red.
+        </div>
+        <div class="hint" id="modeHintBattery" style="display:none;">
+          Al despertar: lee el sensor, conecta WiFi (con timeout), envia datos a Grafana y Telegram si corresponde, luego abre el servidor web durante la ventana configurada. Despues duerme profundamente hasta el proximo ciclo. Solo consume corriente al estar activo.
+        </div>
+      </div>
+
+      <div id="batteryFields" style="display:none; gap:0.9rem;">
+        <div>
+          <label for="sleepInterval">Intervalo de sleep (segundos)</label>
+          <input id="sleepInterval" name="sleepInterval" type="number" min="30" max="86400" step="1">
+          <div class="hint">Tiempo que duerme entre ciclos. 300 = 5 min. Minimo 30, maximo 86400 (24 h).</div>
+        </div>
+        <div>
+          <label for="webWindow">Ventana web tras despertar (segundos)</label>
+          <input id="webWindow" name="webWindow" type="number" min="10" max="3600" step="1">
+          <div class="hint">Cuantos segundos permanece activo el servidor web luego de enviar datos. Minimo 10.</div>
+        </div>
+        <div>
+          <label for="wifiTimeout">Timeout de conexion WiFi (ms)</label>
+          <input id="wifiTimeout" name="wifiTimeout" type="number" min="5000" max="60000" step="500">
+          <div class="hint">Tiempo maximo de espera para conectar a la red antes de continuar sin WiFi. 5000–60000 ms.</div>
+        </div>
+      </div>
+
+      <div id="normalFields">
+        <div>
+          <label for="wifiRetry">Intervalo de reintento WiFi (segundos)</label>
+          <input id="wifiRetry" name="wifiRetry" type="number" min="10" max="3600" step="1">
+          <div class="hint">Cada cuantos segundos reintenta conectar a la red si se desconecta. 120 = 2 min.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" type="submit">Guardar y reiniciar</button>
+      </div>
+    </form>
+    <div class="message" id="powerMessage"></div>
+  </div>
 </div>
 
 <script>
@@ -696,8 +835,36 @@ const elements = {
   statusConnected: document.getElementById('statusConnected'),
   statusIp: document.getElementById('statusIp'),
   statusConfigured: document.getElementById('statusConfigured'),
-  statusPassword: document.getElementById('statusPassword')
+  statusPassword: document.getElementById('statusPassword'),
+  adminPwdForm: document.getElementById('adminPwdForm'),
+  adminPwdMessage: document.getElementById('adminPwdMessage'),
+  currentPwdRow: document.getElementById('currentPwdRow'),
+  currentAdminPass: document.getElementById('currentAdminPass'),
+  newAdminPass: document.getElementById('newAdminPass'),
+  confirmAdminPass: document.getElementById('confirmAdminPass'),
+  sensorCalForm: document.getElementById('sensorCalForm'),
+  sensorCalMessage: document.getElementById('sensorCalMessage'),
+  emptyDistance: document.getElementById('emptyDistance'),
+  fullDistance: document.getElementById('fullDistance'),
+  sensorOffset: document.getElementById('sensorOffset'),
+  liveDistance: document.getElementById('liveDistance'),
+  liveLevel: document.getElementById('liveLevel')
 };
+
+document.querySelectorAll('.pwd-toggle').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const targetId = btn.dataset.target;
+    const input = document.getElementById(targetId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      btn.textContent = 'Ocultar';
+    } else {
+      input.type = 'password';
+      btn.textContent = 'Ver';
+    }
+  });
+});
 
 let selectedSsid = '';
 let scanPollToken = 0;
@@ -784,6 +951,15 @@ function fillStatus(settings) {
   elements.deviceName.value = settings.device_name || '';
   elements.wifiSsid.value = configuredSsid;
   selectedSsid = configuredSsid;
+
+  if (settings.admin_password_configured) {
+    elements.currentPwdRow.classList.remove('hidden');
+    elements.currentAdminPass.required = true;
+  } else {
+    elements.currentPwdRow.classList.add('hidden');
+    elements.currentAdminPass.required = false;
+    elements.currentAdminPass.value = '';
+  }
 }
 
 async function loadSettings() {
@@ -919,9 +1095,204 @@ document.getElementById('wifiForm').addEventListener('submit', async (event) => 
 
 elements.scanButton.addEventListener('click', scanNetworks);
 
+elements.adminPwdForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearMessage(elements.adminPwdMessage);
+
+  const next = elements.newAdminPass.value;
+  const confirm = elements.confirmAdminPass.value;
+
+  if (next.length < 8 || next.length > 64) {
+    showMessage(elements.adminPwdMessage, 'err', 'La nueva contraseña debe tener entre 8 y 64 caracteres.');
+    return;
+  }
+  if (next !== confirm) {
+    showMessage(elements.adminPwdMessage, 'err', 'La confirmacion no coincide.');
+    return;
+  }
+
+  const payload = {
+    current: elements.currentAdminPass.value,
+    new: next
+  };
+
+  showMessage(elements.adminPwdMessage, 'warn', 'Actualizando contraseña admin...');
+
+  try {
+    const response = await fetch('/api/admin/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(text || 'No se pudo cambiar la contraseña.');
+    }
+
+    showMessage(elements.adminPwdMessage, 'ok', text + ' En el proximo acceso el navegador pedira la nueva contraseña.');
+    elements.adminPwdForm.reset();
+    document.querySelectorAll('.pwd-toggle').forEach((btn) => { btn.textContent = 'Ver'; });
+    loadSettings().catch(() => {});
+  } catch (error) {
+    showMessage(elements.adminPwdMessage, 'err', error.message || 'No se pudo cambiar la contraseña.');
+  }
+});
+
+function formatLive(value) {
+  if (value === null || value === undefined || isNaN(value) || value < 0) return '--';
+  return Number(value).toFixed(1);
+}
+
+function fillSensorCal(data) {
+  if (data.empty_distance_cm !== undefined) elements.emptyDistance.value = data.empty_distance_cm;
+  if (data.full_distance_cm !== undefined) elements.fullDistance.value = data.full_distance_cm;
+  if (data.offset_cm !== undefined) elements.sensorOffset.value = data.offset_cm;
+  elements.liveDistance.textContent = formatLive(data.current_distance_cm);
+  elements.liveLevel.textContent = formatLive(data.current_level_pct);
+}
+
+async function loadSensorCal() {
+  try {
+    const response = await fetch('/api/sensor/calibrate', { cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo cargar la calibracion del sensor.');
+    fillSensorCal(await response.json());
+  } catch (error) {
+    showMessage(elements.sensorCalMessage, 'err', error.message || 'No se pudo cargar la calibracion.');
+  }
+}
+
+async function refreshLiveReading() {
+  try {
+    const response = await fetch('/api/sensor/calibrate', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    elements.liveDistance.textContent = formatLive(data.current_distance_cm);
+    elements.liveLevel.textContent = formatLive(data.current_level_pct);
+  } catch (_) { /* ignorar fallos transitorios */ }
+}
+
+elements.sensorCalForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearMessage(elements.sensorCalMessage);
+
+  const empty = parseFloat(elements.emptyDistance.value);
+  const full = parseFloat(elements.fullDistance.value);
+  const offset = parseFloat(elements.sensorOffset.value);
+
+  if (isNaN(empty) || isNaN(full) || isNaN(offset)) {
+    showMessage(elements.sensorCalMessage, 'err', 'Completa todos los campos con numeros validos.');
+    return;
+  }
+  if (empty <= full) {
+    showMessage(elements.sensorCalMessage, 'err', 'La distancia "vacio" debe ser mayor que la de "lleno".');
+    return;
+  }
+  if (offset < -50 || offset > 50) {
+    showMessage(elements.sensorCalMessage, 'err', 'El offset debe estar entre -50 y 50 cm.');
+    return;
+  }
+
+  const payload = {
+    tank: { empty_distance_cm: empty, full_distance_cm: full },
+    sensor: { offset_cm: offset }
+  };
+
+  showMessage(elements.sensorCalMessage, 'warn', 'Guardando calibracion...');
+
+  try {
+    const response = await fetch('/api/sensor/calibrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || 'No se pudo guardar la calibracion.');
+    showMessage(elements.sensorCalMessage, 'ok', text || 'Calibracion guardada.');
+    refreshLiveReading();
+  } catch (error) {
+    showMessage(elements.sensorCalMessage, 'err', error.message || 'No se pudo guardar la calibracion.');
+  }
+});
+
+loadSensorCal();
+setInterval(refreshLiveReading, 5000);
+
 loadSettings().catch((error) => {
   showMessage(elements.formMessage, 'err', error.message || 'No se pudo cargar el estado actual.');
 });
+
+// Power config
+const powerEl = {
+  form: document.getElementById('powerForm'),
+  mode: document.getElementById('powerMode'),
+  hintNormal: document.getElementById('modeHintNormal'),
+  hintBattery: document.getElementById('modeHintBattery'),
+  batteryFields: document.getElementById('batteryFields'),
+  normalFields: document.getElementById('normalFields'),
+  sleepInterval: document.getElementById('sleepInterval'),
+  webWindow: document.getElementById('webWindow'),
+  wifiTimeout: document.getElementById('wifiTimeout'),
+  wifiRetry: document.getElementById('wifiRetry'),
+  message: document.getElementById('powerMessage')
+};
+
+function applyPowerModeUi(mode) {
+  const isBattery = mode === 'battery';
+  powerEl.hintNormal.style.display = isBattery ? 'none' : '';
+  powerEl.hintBattery.style.display = isBattery ? '' : 'none';
+  powerEl.batteryFields.style.display = isBattery ? 'grid' : 'none';
+  powerEl.normalFields.style.display = isBattery ? 'none' : '';
+}
+
+powerEl.mode.addEventListener('change', () => applyPowerModeUi(powerEl.mode.value));
+
+async function loadPowerConfig() {
+  try {
+    const response = await fetch('/api/power', { cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo cargar la config de energia.');
+    const d = await response.json();
+    powerEl.mode.value = d.mode || 'normal';
+    powerEl.sleepInterval.value = d.sleep_interval_sec ?? 300;
+    powerEl.webWindow.value = d.web_window_sec ?? 60;
+    powerEl.wifiTimeout.value = d.wifi_timeout_ms ?? 20000;
+    powerEl.wifiRetry.value = d.wifi_retry_interval_sec ?? 120;
+    applyPowerModeUi(d.mode || 'normal');
+  } catch (error) {
+    showMessage(powerEl.message, 'err', error.message || 'Error cargando config de energia.');
+  }
+}
+
+powerEl.form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearMessage(powerEl.message);
+
+  const mode = powerEl.mode.value;
+  const payload = {
+    mode,
+    sleep_interval_sec: parseInt(powerEl.sleepInterval.value, 10),
+    web_window_sec: parseInt(powerEl.webWindow.value, 10),
+    wifi_timeout_ms: parseInt(powerEl.wifiTimeout.value, 10),
+    wifi_retry_interval_sec: parseInt(powerEl.wifiRetry.value, 10)
+  };
+
+  showMessage(powerEl.message, 'warn', 'Guardando y reiniciando...');
+
+  try {
+    const response = await fetch('/api/power', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || 'No se pudo guardar.');
+    showMessage(powerEl.message, 'ok', text || 'Configuracion guardada. Reiniciando...');
+  } catch (error) {
+    showMessage(powerEl.message, 'err', error.message || 'Error al guardar.');
+  }
+});
+
+loadPowerConfig();
 </script>
 </body>
 </html>

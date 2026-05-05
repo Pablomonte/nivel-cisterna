@@ -20,6 +20,7 @@ inline void applyConfigDefaults(JsonDocument& doc) {
     sensor["echo_pin"] = sensor["echo_pin"] | 18;
     sensor["samples"] = sensor["samples"] | 5;
     sensor["read_interval_sec"] = sensor["read_interval_sec"] | 10;
+    sensor["offset_cm"] = sensor["offset_cm"] | 0.0f;
 
     JsonObject tank = doc["tank"];
     if (tank.isNull()) tank = doc["tank"].to<JsonObject>();
@@ -39,17 +40,6 @@ inline void applyConfigDefaults(JsonDocument& doc) {
     grafana["send_interval_sec"] = grafana["send_interval_sec"] | 10;
     grafana["timeout_ms"] = grafana["timeout_ms"] | 5000;
 
-    JsonObject pump = doc["pump"];
-    if (pump.isNull()) pump = doc["pump"].to<JsonObject>();
-    pump["enabled"] = pump["enabled"] | false;
-    pump["relay_pin"] = pump["relay_pin"] | 26;
-    pump["active_low"] = pump["active_low"] | false;
-    pump["auto_mode"] = pump["auto_mode"] | true;
-    pump["low_threshold"] = pump["low_threshold"] | 20.0f;
-    pump["high_threshold"] = pump["high_threshold"] | 90.0f;
-    pump["hysteresis"] = pump["hysteresis"] | 5.0f;
-    pump["timeout_min"] = pump["timeout_min"] | 30;
-
     JsonObject admin = doc["admin"];
     if (admin.isNull()) admin = doc["admin"].to<JsonObject>();
     admin["username"] = admin["username"] | "admin";
@@ -64,6 +54,14 @@ inline void applyConfigDefaults(JsonDocument& doc) {
     telegram["recovery_threshold_pct"] = telegram["recovery_threshold_pct"] | 30;
     telegram["sensor_failure_threshold"] = telegram["sensor_failure_threshold"] | 3;
     telegram["cooldown_sec"] = telegram["cooldown_sec"] | 900;
+
+    JsonObject power = doc["power"];
+    if (power.isNull()) power = doc["power"].to<JsonObject>();
+    power["mode"]                    = power["mode"]                    | "normal";
+    power["sleep_interval_sec"]      = power["sleep_interval_sec"]      | 300;
+    power["web_window_sec"]          = power["web_window_sec"]          | 60;
+    power["wifi_timeout_ms"]         = power["wifi_timeout_ms"]         | 20000;
+    power["wifi_retry_interval_sec"] = power["wifi_retry_interval_sec"] | 120;
 }
 
 inline bool validateConfig(const JsonDocument& doc, String& error) {
@@ -83,15 +81,26 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
         return false;
     }
 
+    String wifiPass = doc["wifi_pass"] | "";
+    if (wifiPass.length() > 0 && (wifiPass.length() < 8 || wifiPass.length() > 63)) {
+        error = "wifi_pass must be 8-63 characters (WPA2) or empty for AP-only";
+        return false;
+    }
+
     JsonObjectConst sensor = doc["sensor"].as<JsonObjectConst>();
     int samples = sensor["samples"] | 5;
     int readIntervalSec = sensor["read_interval_sec"] | 10;
+    float offsetCm = sensor["offset_cm"] | 0.0f;
     if (samples < 1 || samples > 15) {
         error = "sensor.samples must be between 1 and 15";
         return false;
     }
     if (readIntervalSec < 1) {
         error = "sensor.read_interval_sec must be at least 1";
+        return false;
+    }
+    if (offsetCm < -50.0f || offsetCm > 50.0f) {
+        error = "sensor.offset_cm must be between -50 and 50";
         return false;
     }
 
@@ -140,26 +149,6 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
         return false;
     }
 
-    JsonObjectConst pump = doc["pump"].as<JsonObjectConst>();
-    float lowThreshold = pump["low_threshold"] | 20.0f;
-    float highThreshold = pump["high_threshold"] | 90.0f;
-    float hysteresis = pump["hysteresis"] | 5.0f;
-    int timeoutMin = pump["timeout_min"] | 30;
-    if (lowThreshold < 0 || lowThreshold > 100 ||
-        highThreshold < 0 || highThreshold > 100 ||
-        lowThreshold >= highThreshold) {
-        error = "pump thresholds must satisfy 0 <= low < high <= 100";
-        return false;
-    }
-    if (hysteresis < 0 || hysteresis > 20) {
-        error = "pump.hysteresis must be between 0 and 20";
-        return false;
-    }
-    if (timeoutMin < 1) {
-        error = "pump.timeout_min must be at least 1";
-        return false;
-    }
-
     JsonObjectConst admin = doc["admin"].as<JsonObjectConst>();
     String adminUser = admin["username"] | "";
     String adminPass = admin["password"] | "";
@@ -205,6 +194,34 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
     }
     if (cooldownSec < 60) {
         error = "telegram.cooldown_sec must be at least 60";
+        return false;
+    }
+
+    JsonObjectConst power = doc["power"].as<JsonObjectConst>();
+    String powerMode = power["mode"] | "normal";
+    int sleepIntervalSec = power["sleep_interval_sec"] | 300;
+    int webWindowSec = power["web_window_sec"] | 60;
+    int wifiTimeoutMs = power["wifi_timeout_ms"] | 20000;
+    int wifiRetrySec = power["wifi_retry_interval_sec"] | 120;
+
+    if (powerMode != "normal" && powerMode != "battery") {
+        error = "power.mode must be 'normal' or 'battery'";
+        return false;
+    }
+    if (sleepIntervalSec < 30 || sleepIntervalSec > 86400) {
+        error = "power.sleep_interval_sec must be between 30 and 86400";
+        return false;
+    }
+    if (webWindowSec < 10 || webWindowSec > sleepIntervalSec) {
+        error = "power.web_window_sec must be between 10 and sleep_interval_sec";
+        return false;
+    }
+    if (wifiTimeoutMs < 5000 || wifiTimeoutMs > 60000) {
+        error = "power.wifi_timeout_ms must be between 5000 and 60000";
+        return false;
+    }
+    if (wifiRetrySec < 10 || wifiRetrySec > 3600) {
+        error = "power.wifi_retry_interval_sec must be between 10 and 3600";
         return false;
     }
 

@@ -3,6 +3,7 @@
 #include <WebServer.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
 
 #include "debug.h"
 #include "version.h"
@@ -11,16 +12,16 @@
 #include "tank.h"
 #include "level_sensor.h"
 #include "grafana.h"
-#include "pump_controller.h"
 #include "telegram_notifier.h"
 #include "web_dashboard.h"
+#include "power_manager.h"
 
 WebServer server(80);
 Tank tank;
 LevelSensor sensor;
 GrafanaReporter grafana;
-PumpController pump;
 TelegramNotifier telegram;
+PowerManager powerManager;
 SecretManager secrets;
 JsonDocument config;
 
@@ -355,7 +356,7 @@ void maintainWiFi() {
     if (!wifiConfigured || status == WL_CONNECTED || wifiScan.reconnectPaused || isWifiScanRunning()) return;
 
     unsigned long now = millis();
-    if (now - lastWiFiReconnectAttemptMs < 30000UL) return;
+    if (now - lastWiFiReconnectAttemptMs < powerManager.getWifiRetryIntervalMs()) return;
 
     lastWiFiReconnectAttemptMs = now;
     DBG_INFOLN("[WiFi] Retrying STA connection...");
@@ -384,8 +385,6 @@ String buildTelemetryFields() {
     fields += ",wifi_connected=" + String(WiFi.status() == WL_CONNECTED ? 1 : 0) + "i";
     fields += ",free_heap=" + String(ESP.getFreeHeap()) + "i";
     fields += ",uptime_sec=" + String(millis() / 1000UL) + "i";
-    fields += ",";
-    fields += pump.getGrafanaFields();
     return fields;
 }
 
@@ -422,17 +421,13 @@ void handleApiStatus() {
     doc["ip"] = getActiveIpString();
     doc["free_heap"] = ESP.getFreeHeap();
 
-    doc["pump_enabled"] = pump.isEnabled();
-    doc["pump_on"] = pump.isOn();
-    doc["pump_state"] = pump.getStateString();
-    doc["pump_state_code"] = pump.getStateCode();
-    doc["pump_auto_mode"] = pump.isAutoMode();
-    doc["pump_runtime_sec"] = pump.getTotalRuntimeSec();
-
     doc["grafana_configured"] = grafana.isConfigured();
     doc["grafana_last_http_code"] = grafana.getLastHttpCode();
     doc["grafana_last_success_age_sec"] = grafana.getLastSuccessAgeSec();
     doc["telegram_configured"] = telegram.isConfigured();
+
+    doc["power_mode"] = powerManager.isBatteryMode() ? "battery" : "normal";
+    doc["boot_count"] = powerManager.getBootCount();
 
     String output;
     serializeJson(doc, output);
@@ -448,6 +443,7 @@ void handleApiWifiSettings() {
         doc["ap_ssid"] = deviceName;
         doc["wifi_ssid"] = config["wifi_ssid"] | "";
         doc["wifi_pass_configured"] = getWiFiPassword().length() > 0;
+        doc["admin_password_configured"] = secrets.hasAdminPassword();
         doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
         doc["connected_ssid"] = getConnectedSsid();
         doc["wifi_mode"] = getWifiModeString();
@@ -506,6 +502,131 @@ void handleApiWifiSettings() {
     server.send(200, "text/plain", "Configuracion WiFi guardada. Reiniciando...");
     delay(500);
     ESP.restart();
+}
+
+void handleApiAdminPassword() {
+    if (!requireAdminAuth()) return;
+
+    if (server.method() != HTTP_POST) {
+        server.send(405, "text/plain", "Method not allowed");
+        return;
+    }
+
+    if (!server.hasArg("plain")) {
+        server.send(400, "text/plain", "No body");
+        return;
+    }
+
+    JsonDocument body;
+    DeserializationError err = deserializeJson(body, server.arg("plain"));
+    if (err) {
+        server.send(400, "text/plain", String("JSON error: ") + err.c_str());
+        return;
+    }
+
+    String current = body["current"] | "";
+    String next = body["new"] | "";
+
+    if (next.length() < 8) {
+        server.send(400, "text/plain", "new password must be at least 8 characters");
+        return;
+    }
+    if (next.length() > 64) {
+        server.send(400, "text/plain", "new password must be 64 characters or fewer");
+        return;
+    }
+
+    if (secrets.hasAdminPassword()) {
+        if (current != secrets.getAdminPassword()) {
+            server.send(401, "text/plain", "current password mismatch");
+            return;
+        }
+    }
+
+    if (next == secrets.getAdminPassword()) {
+        server.send(400, "text/plain", "new password must differ from current");
+        return;
+    }
+
+    JsonDocument secretDoc;
+    JsonObject admin = secretDoc["admin"].to<JsonObject>();
+    admin["password"] = next;
+    secrets.absorb(secretDoc);
+
+    server.send(200, "text/plain", "Admin password updated");
+}
+
+void handleApiSensorCalibrate() {
+    if (!requireAdminAuth()) return;
+
+    if (server.method() == HTTP_GET) {
+        JsonDocument doc;
+        doc["empty_distance_cm"] = tank.getEmptyDistance();
+        doc["full_distance_cm"] = tank.getFullDistance();
+        doc["offset_cm"] = sensor.getOffsetCm();
+        doc["current_distance_cm"] = sensor.getDistance();
+        doc["current_level_pct"] = sensor.getLevel();
+        doc["sensor_ok"] = sensor.isOk();
+        String output;
+        serializeJson(doc, output);
+        server.send(200, "application/json", output);
+        return;
+    }
+
+    if (!server.hasArg("plain")) {
+        server.send(400, "text/plain", "No body");
+        return;
+    }
+
+    JsonDocument patchDoc;
+    DeserializationError err = deserializeJson(patchDoc, server.arg("plain"));
+    if (err) {
+        server.send(400, "text/plain", String("JSON error: ") + err.c_str());
+        return;
+    }
+
+    JsonObject patch = patchDoc.as<JsonObject>();
+    if (patch.isNull()) {
+        server.send(400, "text/plain", "Body must be a JSON object");
+        return;
+    }
+
+    JsonDocument updatedConfig = config;
+
+    JsonVariant tankPatch = patch["tank"];
+    if (!tankPatch.isNull()) {
+        if (!tankPatch["empty_distance_cm"].isNull()) {
+            updatedConfig["tank"]["empty_distance_cm"] = tankPatch["empty_distance_cm"].as<float>();
+        }
+        if (!tankPatch["full_distance_cm"].isNull()) {
+            updatedConfig["tank"]["full_distance_cm"] = tankPatch["full_distance_cm"].as<float>();
+        }
+    }
+
+    JsonVariant sensorPatch = patch["sensor"];
+    if (!sensorPatch.isNull() && !sensorPatch["offset_cm"].isNull()) {
+        updatedConfig["sensor"]["offset_cm"] = sensorPatch["offset_cm"].as<float>();
+    }
+
+    applyConfigDefaults(updatedConfig);
+
+    String validationError;
+    if (!validateConfig(updatedConfig, validationError)) {
+        server.send(400, "text/plain", validationError);
+        return;
+    }
+
+    secrets.absorb(updatedConfig);
+    if (!saveConfig(updatedConfig)) {
+        server.send(500, "text/plain", "Failed to save calibration");
+        return;
+    }
+
+    config = updatedConfig;
+    tank.loadFromConfig(config["tank"].as<JsonObject>());
+    sensor.loadFromConfig(config["sensor"].as<JsonObject>());
+
+    server.send(200, "text/plain", "Calibracion guardada y aplicada.");
 }
 
 void handleApiWifiScan() {
@@ -621,6 +742,65 @@ void handleApiWifiScan() {
     server.send(200, "application/json", output);
 }
 
+void handleApiPower() {
+    if (!requireAdminAuth()) return;
+
+    if (server.method() == HTTP_GET) {
+        JsonDocument doc;
+        doc["mode"]                    = config["power"]["mode"]                    | "normal";
+        doc["sleep_interval_sec"]      = config["power"]["sleep_interval_sec"]      | 300;
+        doc["web_window_sec"]          = config["power"]["web_window_sec"]          | 60;
+        doc["wifi_timeout_ms"]         = config["power"]["wifi_timeout_ms"]         | 20000;
+        doc["wifi_retry_interval_sec"] = config["power"]["wifi_retry_interval_sec"] | 120;
+        String output;
+        serializeJson(doc, output);
+        server.send(200, "application/json", output);
+        return;
+    }
+
+    if (!server.hasArg("plain")) {
+        server.send(400, "text/plain", "No body");
+        return;
+    }
+
+    JsonDocument patchDoc;
+    DeserializationError err = deserializeJson(patchDoc, server.arg("plain"));
+    if (err) {
+        server.send(400, "text/plain", String("JSON error: ") + err.c_str());
+        return;
+    }
+
+    JsonDocument updatedConfig = config;
+    if (!patchDoc["mode"].isNull())
+        updatedConfig["power"]["mode"] = patchDoc["mode"].as<String>();
+    if (!patchDoc["sleep_interval_sec"].isNull())
+        updatedConfig["power"]["sleep_interval_sec"] = patchDoc["sleep_interval_sec"].as<int>();
+    if (!patchDoc["web_window_sec"].isNull())
+        updatedConfig["power"]["web_window_sec"] = patchDoc["web_window_sec"].as<int>();
+    if (!patchDoc["wifi_timeout_ms"].isNull())
+        updatedConfig["power"]["wifi_timeout_ms"] = patchDoc["wifi_timeout_ms"].as<int>();
+    if (!patchDoc["wifi_retry_interval_sec"].isNull())
+        updatedConfig["power"]["wifi_retry_interval_sec"] = patchDoc["wifi_retry_interval_sec"].as<int>();
+
+    applyConfigDefaults(updatedConfig);
+
+    String validationError;
+    if (!validateConfig(updatedConfig, validationError)) {
+        server.send(400, "text/plain", validationError);
+        return;
+    }
+
+    secrets.absorb(updatedConfig);
+    if (!saveConfig(updatedConfig)) {
+        server.send(500, "text/plain", "Failed to save config");
+        return;
+    }
+
+    server.send(200, "text/plain", "Configuracion de energia guardada. Reiniciando...");
+    delay(500);
+    ESP.restart();
+}
+
 void handleApiConfig() {
     if (!requireAdminAuth()) return;
 
@@ -668,29 +848,6 @@ void handleApiConfig() {
     ESP.restart();
 }
 
-void handleApiPump() {
-    if (!requireAdminAuth()) return;
-
-    if (!pump.isEnabled()) {
-        server.send(409, "text/plain", "Pump controller disabled");
-        return;
-    }
-
-    String action = server.arg("action");
-    if (action == "on") {
-        pump.manualOn();
-    } else if (action == "off") {
-        pump.manualOff();
-    } else if (action == "auto") {
-        pump.resetToAuto();
-    } else {
-        server.send(400, "text/plain", "Invalid action");
-        return;
-    }
-
-    server.send(200, "text/plain", String("Pump action applied: ") + action);
-}
-
 void handleRestart() {
     if (!requireAdminAuth()) return;
 
@@ -716,6 +873,117 @@ void loadRuntimeConfig() {
     }
 }
 
+void setupOTA() {
+    ArduinoOTA.setHostname(deviceName.c_str());
+
+    String otaPwd = getAdminPassword();
+    if (otaPwd.length() > 0) {
+        ArduinoOTA.setPassword(otaPwd.c_str());
+    }
+
+    ArduinoOTA.onStart([]() {
+        const char* type = (ArduinoOTA.getCommand() == U_FLASH) ? "firmware" : "filesystem";
+        DBG_INFO("[OTA] Update starting (%s)\n", type);
+    });
+    ArduinoOTA.onEnd([]() {
+        DBG_INFOLN("[OTA] Update complete, rebooting");
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        if (total == 0) return;
+        DBG_INFO("[OTA] %u%%\r", (progress * 100U) / total);
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        const char* msg = "unknown";
+        switch (error) {
+            case OTA_AUTH_ERROR:    msg = "auth failed"; break;
+            case OTA_BEGIN_ERROR:   msg = "begin failed"; break;
+            case OTA_CONNECT_ERROR: msg = "connect failed"; break;
+            case OTA_RECEIVE_ERROR: msg = "receive failed"; break;
+            case OTA_END_ERROR:     msg = "end failed"; break;
+        }
+        DBG_ERROR("[OTA] Error: %s\n", msg);
+    });
+
+    ArduinoOTA.begin();
+    DBG_INFO("[OTA] Listening as %s on port 3232 (auth: %s)\n",
+             deviceName.c_str(),
+             otaPwd.length() > 0 ? "yes" : "no");
+}
+
+void registerRoutes() {
+    server.on("/", HTTP_GET, handleRoot);
+    server.on("/wifi", HTTP_GET, handleWifiPage);
+    server.on("/api/status", HTTP_GET, handleApiStatus);
+    server.on("/api/config", HTTP_GET, handleApiConfig);
+    server.on("/api/config", HTTP_POST, handleApiConfig);
+    server.on("/api/wifi/settings", HTTP_GET, handleApiWifiSettings);
+    server.on("/api/wifi/settings", HTTP_POST, handleApiWifiSettings);
+    server.on("/api/wifi/scan", HTTP_GET, handleApiWifiScan);
+    server.on("/api/wifi/scan", HTTP_POST, handleApiWifiScan);
+    server.on("/api/admin/password", HTTP_POST, handleApiAdminPassword);
+    server.on("/api/sensor/calibrate", HTTP_GET, handleApiSensorCalibrate);
+    server.on("/api/sensor/calibrate", HTTP_POST, handleApiSensorCalibrate);
+    server.on("/api/power", HTTP_GET, handleApiPower);
+    server.on("/api/power", HTTP_POST, handleApiPower);
+    server.on("/restart", HTTP_POST, handleRestart);
+
+    server.onNotFound([]() {
+        if (server.uri().startsWith("/api/")) {
+            server.send(404, "application/json", "{\"error\":\"not_found\"}");
+            return;
+        }
+        server.sendHeader("Location", "/", true);
+        server.send(302, "text/plain", "");
+    });
+}
+
+void runBatteryModeCycle() {
+    sensor.resetReadTimer();
+    sensor.update();
+    rtcState.lastLevel = sensor.getLevel();
+
+    telegram.restoreFromRtc(rtcState.telegramLowLevelSent,
+                             rtcState.telegramSensorFailSent);
+
+    bool wifiOk = powerManager.connectWithTimeout(
+        config["wifi_ssid"] | "",
+        getWiFiPassword()
+    );
+
+    if (wifiOk) {
+        syncClock();
+        unsigned long ntpStart = millis();
+        while (!telegram.hasValidTime() && millis() - ntpStart < 3000UL) {
+            delay(100);
+        }
+        grafana.send(buildTelemetryFields());
+        telegram.update(sensor);
+    }
+
+    telegram.saveToRtc(rtcState.telegramLowLevelSent,
+                        rtcState.telegramSensorFailSent);
+
+    startAccessPoint(wifiOk);
+    setupOTA();
+    registerRoutes();
+    server.begin();
+    DBG_INFOLN("[OK] Web server started");
+
+    powerManager.startWebWindow();
+    while (powerManager.isWebWindowActive()) {
+        ArduinoOTA.handle();
+        server.handleClient();
+        sensor.update();
+        telegram.update(sensor);
+        delay(10);
+    }
+
+    telegram.saveToRtc(rtcState.telegramLowLevelSent,
+                        rtcState.telegramSensorFailSent);
+
+    powerManager.enterDeepSleep();
+}
+
 void setup() {
     DEBUG_BEGIN(115200);
     delay(500);
@@ -736,6 +1004,8 @@ void setup() {
     loadRuntimeConfig();
 
     deviceName = config["device_name"] | "cisterna-01";
+
+    powerManager.loadFromConfig(config["power"].as<JsonObject>());
 
     IF_VERBOSE({
         JsonDocument redacted = config;
@@ -759,43 +1029,26 @@ void setup() {
         DBG_ERRORLN("[WARN] Sensor init failed - will retry");
     }
 
-    DBG_INFOLN("\n[INFO] Configuring pump...");
-    pump.loadFromConfig(config["pump"].as<JsonObject>());
-    if (pump.init()) {
-        DBG_INFOLN("[OK] Pump controller ready");
-    } else {
-        DBG_INFOLN("[Pump] Disabled");
-    }
-
     DBG_INFOLN("\n[INFO] Configuring Grafana...");
     grafana.loadFromConfig(config["grafana"].as<JsonObject>(), deviceName.c_str());
 
     DBG_INFOLN("\n[INFO] Configuring Telegram...");
     telegram.loadFromConfig(config["telegram"].as<JsonObject>(), deviceName.c_str());
 
+    if (powerManager.isBatteryMode()) {
+        DBG_INFOLN("\n[Power] Battery mode - single cycle");
+        runBatteryModeCycle();
+        // no retorna
+    }
+
     DBG_INFOLN("\n[INFO] Connecting WiFi...");
     connectWiFi();
 
-    server.on("/", HTTP_GET, handleRoot);
-    server.on("/wifi", HTTP_GET, handleWifiPage);
-    server.on("/api/status", HTTP_GET, handleApiStatus);
-    server.on("/api/config", HTTP_GET, handleApiConfig);
-    server.on("/api/config", HTTP_POST, handleApiConfig);
-    server.on("/api/wifi/settings", HTTP_GET, handleApiWifiSettings);
-    server.on("/api/wifi/settings", HTTP_POST, handleApiWifiSettings);
-    server.on("/api/wifi/scan", HTTP_GET, handleApiWifiScan);
-    server.on("/api/wifi/scan", HTTP_POST, handleApiWifiScan);
-    server.on("/api/pump", HTTP_POST, handleApiPump);
-    server.on("/restart", HTTP_POST, handleRestart);
+    WiFi.setSleep(WIFI_PS_MIN_MODEM);
 
-    server.onNotFound([]() {
-        if (server.uri().startsWith("/api/")) {
-            server.send(404, "application/json", "{\"error\":\"not_found\"}");
-            return;
-        }
-        server.sendHeader("Location", "/", true);
-        server.send(302, "text/plain", "");
-    });
+    setupOTA();
+
+    registerRoutes();
 
     server.begin();
     DBG_INFOLN("[OK] Web server started on port 80");
@@ -815,13 +1068,13 @@ void setup() {
 }
 
 void loop() {
+    ArduinoOTA.handle();
     server.handleClient();
     cleanupTimedOutWiFiScan();
     maintainWiFi();
 
     sensor.update();
-    pump.update(sensor.getLevel());
-    telegram.update(sensor, pump);
+    telegram.update(sensor);
 
     if (grafana.shouldSend()) {
         grafana.send(buildTelemetryFields());
