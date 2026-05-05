@@ -94,7 +94,7 @@ public:
                     tank(nullptr) {}
 
     void setTank(Tank* t) { tank = t; }
-    void resetReadTimer() { lastReadTime = 0; }
+    void resetReadTimer() { lastReadTime = millis() - readIntervalMs; }
 
     void loadFromConfig(JsonObject cfg) {
         triggerPin = cfg["trigger_pin"] | 5;
