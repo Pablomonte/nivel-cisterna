@@ -13,8 +13,6 @@ struct RtcState {
     uint32_t magic;
     uint32_t bootCount;
     float    lastLevel;
-    bool     telegramLowLevelSent;
-    bool     telegramSensorFailSent;
     time_t   lastNtpSync;
 };
 
@@ -32,7 +30,7 @@ private:
 
 public:
     PowerManager() : mode("normal"), sleepIntervalSec(300), webWindowMs(60000),
-                     wifiTimeoutMs(20000), wifiRetryIntervalMs(120000),
+                     wifiTimeoutMs(20000), wifiRetryIntervalMs(30000),
                      webWindowStartMs(0), firstBoot(false) {}
 
     void loadFromConfig(JsonObject cfg) {
@@ -40,7 +38,7 @@ public:
         sleepIntervalSec = cfg["sleep_interval_sec"] | 300;
         webWindowMs = (unsigned long)(cfg["web_window_sec"] | 60) * 1000UL;
         wifiTimeoutMs = cfg["wifi_timeout_ms"] | 20000;
-        wifiRetryIntervalMs = (unsigned long)(cfg["wifi_retry_interval_sec"] | 120) * 1000UL;
+        wifiRetryIntervalMs = (unsigned long)(cfg["wifi_retry_interval_sec"] | 30) * 1000UL;
 
         if (rtcState.magic != RTC_MAGIC) {
             memset(&rtcState, 0, sizeof(rtcState));

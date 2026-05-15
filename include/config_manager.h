@@ -25,13 +25,13 @@ inline void applyConfigDefaults(JsonDocument& doc) {
     JsonObject tank = doc["tank"];
     if (tank.isNull()) tank = doc["tank"].to<JsonObject>();
     tank["shape"] = tank["shape"] | "cylindrical";
-    tank["height_cm"] = tank["height_cm"] | 150;
-    tank["diameter_cm"] = tank["diameter_cm"] | 120;
-    tank["width_cm"] = tank["width_cm"] | 0;
-    tank["length_cm"] = tank["length_cm"] | 0;
-    tank["capacity_liters"] = tank["capacity_liters"] | 0;
-    tank["empty_distance_cm"] = tank["empty_distance_cm"] | 145;
-    tank["full_distance_cm"] = tank["full_distance_cm"] | 10;
+    tank["height_cm"] = tank["height_cm"] | 150.0f;
+    tank["diameter_cm"] = tank["diameter_cm"] | 120.0f;
+    tank["width_cm"] = tank["width_cm"] | 0.0f;
+    tank["length_cm"] = tank["length_cm"] | 0.0f;
+    tank["capacity_liters"] = tank["capacity_liters"] | 0.0f;
+    tank["empty_distance_cm"] = tank["empty_distance_cm"] | 145.0f;
+    tank["full_distance_cm"] = tank["full_distance_cm"] | 10.0f;
 
     JsonObject grafana = doc["grafana"];
     if (grafana.isNull()) grafana = doc["grafana"].to<JsonObject>();
@@ -45,23 +45,13 @@ inline void applyConfigDefaults(JsonDocument& doc) {
     admin["username"] = admin["username"] | "admin";
     admin["password"] = admin["password"] | "";
 
-    JsonObject telegram = doc["telegram"];
-    if (telegram.isNull()) telegram = doc["telegram"].to<JsonObject>();
-    telegram["enabled"] = telegram["enabled"] | false;
-    telegram["chat_id"] = telegram["chat_id"] | "";
-    telegram["bot_token"] = telegram["bot_token"] | "";
-    telegram["low_level_threshold_pct"] = telegram["low_level_threshold_pct"] | 15;
-    telegram["recovery_threshold_pct"] = telegram["recovery_threshold_pct"] | 30;
-    telegram["sensor_failure_threshold"] = telegram["sensor_failure_threshold"] | 3;
-    telegram["cooldown_sec"] = telegram["cooldown_sec"] | 900;
-
     JsonObject power = doc["power"];
     if (power.isNull()) power = doc["power"].to<JsonObject>();
     power["mode"]                    = power["mode"]                    | "normal";
     power["sleep_interval_sec"]      = power["sleep_interval_sec"]      | 300;
     power["web_window_sec"]          = power["web_window_sec"]          | 60;
     power["wifi_timeout_ms"]         = power["wifi_timeout_ms"]         | 20000;
-    power["wifi_retry_interval_sec"] = power["wifi_retry_interval_sec"] | 120;
+    power["wifi_retry_interval_sec"] = power["wifi_retry_interval_sec"] | 30;
 }
 
 inline bool validateConfig(const JsonDocument& doc, String& error) {
@@ -161,48 +151,12 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
         return false;
     }
 
-    JsonObjectConst telegram = doc["telegram"].as<JsonObjectConst>();
-    bool telegramEnabled = telegram["enabled"] | false;
-    int lowLevelThreshold = telegram["low_level_threshold_pct"] | 15;
-    int recoveryThreshold = telegram["recovery_threshold_pct"] | 30;
-    int sensorFailureThreshold = telegram["sensor_failure_threshold"] | 3;
-    int cooldownSec = telegram["cooldown_sec"] | 900;
-
-    if (telegramEnabled) {
-        String chatId = telegram["chat_id"] | "";
-        String botToken = telegram["bot_token"] | "";
-        if (chatId.length() == 0) {
-            error = "telegram.chat_id is required when telegram is enabled";
-            return false;
-        }
-        if (botToken.length() == 0) {
-            error = "telegram.bot_token is required when telegram is enabled";
-            return false;
-        }
-    }
-    if (lowLevelThreshold < 1 || lowLevelThreshold > 99) {
-        error = "telegram.low_level_threshold_pct must be between 1 and 99";
-        return false;
-    }
-    if (recoveryThreshold <= lowLevelThreshold || recoveryThreshold > 100) {
-        error = "telegram.recovery_threshold_pct must be greater than low level threshold and <= 100";
-        return false;
-    }
-    if (sensorFailureThreshold < 1) {
-        error = "telegram.sensor_failure_threshold must be at least 1";
-        return false;
-    }
-    if (cooldownSec < 60) {
-        error = "telegram.cooldown_sec must be at least 60";
-        return false;
-    }
-
     JsonObjectConst power = doc["power"].as<JsonObjectConst>();
     String powerMode = power["mode"] | "normal";
     int sleepIntervalSec = power["sleep_interval_sec"] | 300;
     int webWindowSec = power["web_window_sec"] | 60;
     int wifiTimeoutMs = power["wifi_timeout_ms"] | 20000;
-    int wifiRetrySec = power["wifi_retry_interval_sec"] | 120;
+    int wifiRetrySec = power["wifi_retry_interval_sec"] | 30;
 
     if (powerMode != "normal" && powerMode != "battery") {
         error = "power.mode must be 'normal' or 'battery'";

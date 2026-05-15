@@ -52,14 +52,12 @@ public:
         applySecret(doc["wifi_pass"], "wifi_pass");
         applySecret(doc["grafana"]["token"], "grafana_token");
         applySecret(doc["admin"]["password"], "admin_pass");
-        applySecret(doc["telegram"]["bot_token"], "telegram_token");
     }
 
     void absorb(JsonDocument& doc) {
         storeSecret(doc["wifi_pass"], "wifi_pass");
         storeSecret(doc["grafana"]["token"], "grafana_token");
         storeSecret(doc["admin"]["password"], "admin_pass");
-        storeSecret(doc["telegram"]["bot_token"], "telegram_token");
 
         doc.remove("wifi_pass");
 
@@ -71,11 +69,6 @@ public:
         JsonObject admin = doc["admin"];
         if (!admin.isNull()) {
             admin.remove("password");
-        }
-
-        JsonObject telegram = doc["telegram"];
-        if (!telegram.isNull()) {
-            telegram.remove("bot_token");
         }
     }
 
@@ -95,11 +88,6 @@ public:
             admin["password_configured"] = getSecret("admin_pass").length() > 0;
         }
 
-        JsonObject telegram = doc["telegram"];
-        if (!telegram.isNull()) {
-            telegram.remove("bot_token");
-            telegram["bot_token_configured"] = getSecret("telegram_token").length() > 0;
-        }
     }
 
     String getAdminPassword() {

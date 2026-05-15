@@ -20,6 +20,9 @@ extern void testAdminPassword_RejectsTooLong();
 extern void testAdminPassword_RejectsSameAsCurrent();
 extern void testAdminPassword_RequiresCurrentWhenConfigured();
 extern void testAdminPassword_AllowsFirstSetWhenUnconfigured();
+extern void testApplyDefaults_PreservesFloatTankCalibration();
+extern void testApplyDefaults_AppliesFloatDefaultsWhenMissing();
+extern void testArduinoJsonV7_OrOperatorRequiresExactType();
 
 void setUp() {}
 void tearDown() {}
@@ -46,5 +49,8 @@ int main() {
     RUN_TEST(testAdminPassword_RejectsSameAsCurrent);
     RUN_TEST(testAdminPassword_RequiresCurrentWhenConfigured);
     RUN_TEST(testAdminPassword_AllowsFirstSetWhenUnconfigured);
+    RUN_TEST(testApplyDefaults_PreservesFloatTankCalibration);
+    RUN_TEST(testApplyDefaults_AppliesFloatDefaultsWhenMissing);
+    RUN_TEST(testArduinoJsonV7_OrOperatorRequiresExactType);
     return UNITY_END();
 }

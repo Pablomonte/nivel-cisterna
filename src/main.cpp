@@ -12,7 +12,6 @@
 #include "tank.h"
 #include "level_sensor.h"
 #include "grafana.h"
-#include "telegram_notifier.h"
 #include "web_dashboard.h"
 #include "power_manager.h"
 
@@ -20,7 +19,6 @@ WebServer server(80);
 Tank tank;
 LevelSensor sensor;
 GrafanaReporter grafana;
-TelegramNotifier telegram;
 PowerManager powerManager;
 SecretManager secrets;
 JsonDocument config;
@@ -424,7 +422,6 @@ void handleApiStatus() {
     doc["grafana_configured"] = grafana.isConfigured();
     doc["grafana_last_http_code"] = grafana.getLastHttpCode();
     doc["grafana_last_success_age_sec"] = grafana.getLastSuccessAgeSec();
-    doc["telegram_configured"] = telegram.isConfigured();
 
     doc["power_mode"] = powerManager.isBatteryMode() ? "battery" : "normal";
     doc["boot_count"] = powerManager.getBootCount();
@@ -591,21 +588,29 @@ void handleApiSensorCalibrate() {
         return;
     }
 
-    JsonDocument updatedConfig = config;
+    JsonDocument updatedConfig;
+    updatedConfig.set(config);
 
-    JsonVariant tankPatch = patch["tank"];
-    if (!tankPatch.isNull()) {
-        if (!tankPatch["empty_distance_cm"].isNull()) {
-            updatedConfig["tank"]["empty_distance_cm"] = tankPatch["empty_distance_cm"].as<float>();
+    JsonObject configTank = updatedConfig["tank"].is<JsonObject>()
+        ? updatedConfig["tank"].as<JsonObject>()
+        : updatedConfig["tank"].to<JsonObject>();
+    JsonObject configSensor = updatedConfig["sensor"].is<JsonObject>()
+        ? updatedConfig["sensor"].as<JsonObject>()
+        : updatedConfig["sensor"].to<JsonObject>();
+
+    JsonObject patchTank = patch["tank"].as<JsonObject>();
+    if (!patchTank.isNull()) {
+        if (!patchTank["empty_distance_cm"].isNull()) {
+            configTank["empty_distance_cm"] = patchTank["empty_distance_cm"].as<float>();
         }
-        if (!tankPatch["full_distance_cm"].isNull()) {
-            updatedConfig["tank"]["full_distance_cm"] = tankPatch["full_distance_cm"].as<float>();
+        if (!patchTank["full_distance_cm"].isNull()) {
+            configTank["full_distance_cm"] = patchTank["full_distance_cm"].as<float>();
         }
     }
 
-    JsonVariant sensorPatch = patch["sensor"];
-    if (!sensorPatch.isNull() && !sensorPatch["offset_cm"].isNull()) {
-        updatedConfig["sensor"]["offset_cm"] = sensorPatch["offset_cm"].as<float>();
+    JsonObject patchSensor = patch["sensor"].as<JsonObject>();
+    if (!patchSensor.isNull() && !patchSensor["offset_cm"].isNull()) {
+        configSensor["offset_cm"] = patchSensor["offset_cm"].as<float>();
     }
 
     applyConfigDefaults(updatedConfig);
@@ -751,7 +756,7 @@ void handleApiPower() {
         doc["sleep_interval_sec"]      = config["power"]["sleep_interval_sec"]      | 300;
         doc["web_window_sec"]          = config["power"]["web_window_sec"]          | 60;
         doc["wifi_timeout_ms"]         = config["power"]["wifi_timeout_ms"]         | 20000;
-        doc["wifi_retry_interval_sec"] = config["power"]["wifi_retry_interval_sec"] | 120;
+        doc["wifi_retry_interval_sec"] = config["power"]["wifi_retry_interval_sec"] | 30;
         String output;
         serializeJson(doc, output);
         server.send(200, "application/json", output);
@@ -942,9 +947,6 @@ void runBatteryModeCycle() {
     sensor.update();
     rtcState.lastLevel = sensor.getLevel();
 
-    telegram.restoreFromRtc(rtcState.telegramLowLevelSent,
-                             rtcState.telegramSensorFailSent);
-
     bool wifiOk = powerManager.connectWithTimeout(
         config["wifi_ssid"] | "",
         getWiFiPassword()
@@ -952,16 +954,8 @@ void runBatteryModeCycle() {
 
     if (wifiOk) {
         syncClock();
-        unsigned long ntpStart = millis();
-        while (!telegram.hasValidTime() && millis() - ntpStart < 3000UL) {
-            delay(100);
-        }
         grafana.send(buildTelemetryFields());
-        telegram.update(sensor);
     }
-
-    telegram.saveToRtc(rtcState.telegramLowLevelSent,
-                        rtcState.telegramSensorFailSent);
 
     startAccessPoint(wifiOk);
     setupOTA();
@@ -974,12 +968,8 @@ void runBatteryModeCycle() {
         ArduinoOTA.handle();
         server.handleClient();
         sensor.update();
-        telegram.update(sensor);
         delay(10);
     }
-
-    telegram.saveToRtc(rtcState.telegramLowLevelSent,
-                        rtcState.telegramSensorFailSent);
 
     powerManager.enterDeepSleep();
 }
@@ -1032,9 +1022,6 @@ void setup() {
     DBG_INFOLN("\n[INFO] Configuring Grafana...");
     grafana.loadFromConfig(config["grafana"].as<JsonObject>(), deviceName.c_str());
 
-    DBG_INFOLN("\n[INFO] Configuring Telegram...");
-    telegram.loadFromConfig(config["telegram"].as<JsonObject>(), deviceName.c_str());
-
     if (powerManager.isBatteryMode()) {
         DBG_INFOLN("\n[Power] Battery mode - single cycle");
         runBatteryModeCycle();
@@ -1044,7 +1031,7 @@ void setup() {
     DBG_INFOLN("\n[INFO] Connecting WiFi...");
     connectWiFi();
 
-    WiFi.setSleep(WIFI_PS_MIN_MODEM);
+    WiFi.setSleep(WIFI_PS_NONE);
 
     setupOTA();
 
@@ -1074,7 +1061,6 @@ void loop() {
     maintainWiFi();
 
     sensor.update();
-    telegram.update(sensor);
 
     if (grafana.shouldSend()) {
         grafana.send(buildTelemetryFields());

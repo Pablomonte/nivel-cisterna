@@ -1,0 +1,22 @@
+apiVersion: 1
+
+# Provisioning de contact points para Grafana Unified Alerting.
+# Aplicar copiando este archivo a /etc/grafana/provisioning/alerting/ del server
+# y reiniciando Grafana. Las variables ${TELEGRAM_BOT_TOKEN} / ${TELEGRAM_CHAT_ID}
+# las resuelve Grafana al cargar el archivo - exportarlas via systemd
+# environment o /etc/grafana/grafana.ini [security].secrets_provider.
+
+contactPoints:
+  - orgId: 4
+    name: telegram-cisterna
+    receivers:
+      - uid: telegram-cisterna-receiver
+        type: telegram
+        settings:
+          bottoken: "${TELEGRAM_BOT_TOKEN}"
+          chatid: "${TELEGRAM_CHAT_ID}"
+          parse_mode: "HTML"
+          # Template render por alerta (Status/device/value).
+          # Firing: muestra causa + valor que disparo. Resolved: omite description y value (Grafana cachea el valor del firing, mostrarlo en resolved es confuso); incluye Inicio y duracion del incidente.
+          message: "{{ range .Alerts -}}{{ if eq .Status \"firing\" }}<b>⚠️ Aviso: {{ .Annotations.summary }}</b>\n{{ if .Annotations.description }}{{ .Annotations.description }}\n{{ end }}{{ if .Annotations.value }}Valor: <b>{{ .Annotations.value }}</b>\n{{ end }}Device: {{ .Labels.device }}\nInicio: {{ .StartsAt.Format \"02/01 15:04\" }}{{ else }}<b>✅ Normalizado: {{ .Annotations.summary }}</b>\nDevice: {{ .Labels.device }} — Inicio: {{ .StartsAt.Format \"02/01 15:04\" }}\nResuelto: {{ .EndsAt.Format \"02/01 15:04\" }} (duro {{ .EndsAt.Sub .StartsAt }}){{ end }}\n{{ end }}"
+        disableResolveMessage: false

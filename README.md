@@ -1,14 +1,13 @@
 # Nivel Cisterna
 
-Monitor de nivel de agua para cisterna con ESP32, sensor ultrasonico waterproof JSN-SR04T, dashboard web embebido, reporte a Grafana/InfluxDB, alertas Telegram y control opcional de bomba.
+Monitor de nivel de agua para cisterna con ESP32, sensor ultrasonico waterproof JSN-SR04T, dashboard web embebido y reporte a Grafana/InfluxDB. Las alertas (nivel critico, rebalse, sensor caido, sin datos) viven en Grafana — ver [ops/grafana/](ops/grafana/README.md).
 
 ## Funcionalidades
 
 - Sensor ultrasonico con filtro mediana y metricas de salud (`sensor_ok`, fallas consecutivas, variacion entre muestras).
-- Dashboard web embebido con nivel, volumen, estado del sensor, estado de la bomba y datos de enlace.
+- Dashboard web embebido con nivel, volumen, estado del sensor, energia y datos de enlace.
 - Reporte a Grafana/InfluxDB por HTTP POST con heartbeat periodico aunque falle la lectura.
-- Control de bomba opcional con histeresis, timeout de seguridad, modo manual y metricas para timeline/alertas.
-- Notificaciones Telegram directas desde el ESP32 para nivel critico, timeout de bomba, error de sensor y recuperacion.
+- Modo `battery` opcional con deep sleep entre ciclos de medicion.
 - Configuracion JSON persistente en SPIFFS con secretos sensibles guardados en NVS.
 - WiFi con AP seguro de fallback para provision inicial o contingencia.
 
@@ -18,7 +17,6 @@ Monitor de nivel de agua para cisterna con ESP32, sensor ultrasonico waterproof 
 |------------|-----------|-------|
 | Sensor Trig | GPIO 5 | JSN-SR04T (modulo + cabezal IP67) |
 | Sensor Echo | GPIO 18 | JSN-SR04T (modulo + cabezal IP67) |
-| Relay Bomba | GPIO 26 | Opcional, modulo 1CH |
 
 ## Compilacion
 
@@ -32,7 +30,7 @@ pio device monitor -b 115200
 
 ## Configuracion
 
-El proyecto incluye un ejemplo en [data/config.json.example](data/config.json.example). El `data/config.json` real esta gitignored. Los campos sensibles (`wifi_pass`, `grafana.token`, `admin.password`, `telegram.bot_token`) se aceptan por API, pero al guardarse quedan en NVS y no vuelven a exponerse por `/api/config`.
+El proyecto incluye un ejemplo en [data/config.json.example](data/config.json.example). El `data/config.json` real esta gitignored. Los campos sensibles (`wifi_pass`, `grafana.token`, `admin.password`) se aceptan por API, pero al guardarse quedan en NVS y no vuelven a exponerse por `/api/config`.
 
 ### Provisioning local con `.env` (recomendado)
 
@@ -40,14 +38,14 @@ Para no commitear secretos al repo, usar variables de entorno y el script de pro
 
 ```bash
 cp .env.example .env
-$EDITOR .env                    # llenar TELEGRAM_BOT_TOKEN, etc.
+$EDITOR .env                    # llenar WIFI_PASS, GRAFANA_TOKEN, etc.
 ./scripts/provision_config.sh   # mergea .env -> data/config.json
 pio run -e cisterna_dev -t uploadfs
 ```
 
-Tanto `.env` como `data/config.json` estan en `.gitignore`. El script solo escribe los campos que estan seteados; lo demas se mantiene del JSON existente. Si `telegram.enabled=true`, el script exige `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
+Tanto `.env` como `data/config.json` estan en `.gitignore`. El script solo escribe los campos que estan seteados; lo demas se mantiene del JSON existente.
 
-Variables soportadas: `TELEGRAM_ENABLED`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `WIFI_SSID`, `WIFI_PASS`, `GRAFANA_URL`, `GRAFANA_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
+Variables soportadas: `WIFI_SSID`, `WIFI_PASS`, `GRAFANA_URL`, `GRAFANA_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
 
 En el primer arranque, o si no hay `wifi_ssid`, el equipo levanta un AP WPA2 con:
 
@@ -71,10 +69,10 @@ curl -u admin:<password> \
 | Endpoint | Metodo | Descripcion |
 |----------|--------|-------------|
 | `/` | GET | Dashboard web |
-| `/api/status` | GET | Estado actual, salud del sensor, bomba, WiFi y heap |
+| `/api/status` | GET | Estado actual, salud del sensor, WiFi y heap |
 | `/api/config` | GET | Configuracion actual redacted, requiere Basic Auth |
 | `/api/config` | POST | Actualiza configuracion y reinicia, requiere Basic Auth |
-| `/api/pump?action=on|off|auto` | POST | Control manual/auto de bomba, requiere Basic Auth |
+| `/api/power` | GET/POST | Configuracion de energia (normal/battery), requiere Basic Auth |
 | `/restart` | POST | Reinicia el dispositivo, requiere Basic Auth |
 
 ## Campos enviados a Grafana
@@ -82,23 +80,25 @@ curl -u admin:<password> \
 Ejemplo de line protocol:
 
 ```text
-cisterna,device=cisterna-01 level=85.2,distance=23.4,volume=1200,sensor_ok=1i,sensor_failures=0i,sensor_spread_cm=0.7,last_success_age_sec=2i,capacity=1700.0,wifi_connected=1i,free_heap=231112i,uptime_sec=7200i,pump_enabled=1i,pump_on=0i,pump_state_code=0i,pump_runtime_sec=3600i,pump_auto_mode=1i
+cisterna,device=cist-01 level=85.2,distance=23.4,volume=1200,sensor_ok=1i,sensor_failures=0i,sensor_spread_cm=0.7,last_success_age_sec=2i,capacity=1700.0,wifi_connected=1i,free_heap=231112i,uptime_sec=7200i
 ```
 
 Campos utiles para dashboards/alertas:
 
 - `level`, `distance`, `volume`, `capacity`
 - `sensor_ok`, `sensor_failures`, `sensor_spread_cm`, `last_success_age_sec`
-- `pump_enabled`, `pump_on`, `pump_state_code`, `pump_runtime_sec`, `pump_auto_mode`
 - `wifi_connected`, `free_heap`, `uptime_sec`
 
-## Sugerencia de alertas
+## Alertas
 
-- Nivel critico: `level <= 15` con `sensor_ok == 1`
-- Nivel bajo: `level <= 30` con `sensor_ok == 1`
-- Sensor erratico: `sensor_spread_cm` alto o `sensor_failures > 0`
-- Device offline: ausencia de serie o `last_success_age_sec` creciendo fuera del intervalo esperado
-- Bomba timeout: `pump_state_code == 4`
+Las alertas se manejan en Grafana, no en el firmware. Ver [ops/grafana/](ops/grafana/README.md) para las 4 reglas provisionadas:
+
+- `cist-low-level`: `level < 15` por 5 min, resolucion a 30 (hysteresis).
+- `cist-overflow`: `level > 95` por 1 min, resolucion a 90 (hysteresis).
+- `cist-sensor-fault`: `sensor_ok == 0` por 2 min.
+- `cist-no-data`: cero puntos en los ultimos 30 min.
+
+Todas notifican al chat de Telegram via el contact point `telegram-cisterna` de Grafana.
 
 ## Estructura
 
@@ -108,15 +108,16 @@ include/
   debug.h
   grafana.h
   level_sensor.h
-  pump_controller.h
+  power_manager.h
   secret_manager.h
   tank.h
-  telegram_notifier.h
   version.h
   web_dashboard.h
 src/
   main.cpp
 data/
   config.json
+ops/
+  grafana/   # provisioning de alertas
 platformio.ini
 ```

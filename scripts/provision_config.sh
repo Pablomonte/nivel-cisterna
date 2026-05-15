@@ -7,7 +7,7 @@
 # Uso:
 #   ./scripts/provision_config.sh           # carga ./.env si existe
 #   ./scripts/provision_config.sh ruta.env  # carga otro archivo
-#   TELEGRAM_BOT_TOKEN=... ./scripts/provision_config.sh
+#   GRAFANA_TOKEN=... ./scripts/provision_config.sh
 #
 # Requiere: jq
 
@@ -75,12 +75,6 @@ ensure_object() {
 assign_string '.wifi_ssid' "${WIFI_SSID:-}"
 assign_string '.wifi_pass' "${WIFI_PASS:-}"
 
-# Telegram
-ensure_object '.telegram'
-assign_bool   '.telegram.enabled'   "${TELEGRAM_ENABLED:-}"
-assign_string '.telegram.bot_token' "${TELEGRAM_BOT_TOKEN:-}"
-assign_string '.telegram.chat_id'   "${TELEGRAM_CHAT_ID:-}"
-
 # Grafana
 ensure_object '.grafana'
 assign_string '.grafana.url'   "${GRAFANA_URL:-}"
@@ -90,16 +84,6 @@ assign_string '.grafana.token' "${GRAFANA_TOKEN:-}"
 ensure_object '.admin'
 assign_string '.admin.username' "${ADMIN_USERNAME:-}"
 assign_string '.admin.password' "${ADMIN_PASSWORD:-}"
-
-# Validacion: si telegram.enabled es true, exigir bot_token y chat_id.
-if [[ "$(jq -r '.telegram.enabled // false' <<<"$JSON")" == "true" ]]; then
-    bt="$(jq -r '.telegram.bot_token // ""' <<<"$JSON")"
-    ci="$(jq -r '.telegram.chat_id // ""' <<<"$JSON")"
-    if [[ -z "$bt" || -z "$ci" ]]; then
-        echo "[provision] telegram.enabled=true pero falta bot_token o chat_id" >&2
-        exit 2
-    fi
-fi
 
 # Escritura atomica.
 TMP="${CONFIG}.tmp"

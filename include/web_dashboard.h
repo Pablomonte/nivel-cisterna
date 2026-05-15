@@ -782,7 +782,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
           El dispositivo permanece activo, el servidor web esta disponible en todo momento y el WiFi se mantiene conectado. Reconexion automatica cada cierta cantidad de segundos si pierde la red.
         </div>
         <div class="hint" id="modeHintBattery" style="display:none;">
-          Al despertar: lee el sensor, conecta WiFi (con timeout), envia datos a Grafana y Telegram si corresponde, luego abre el servidor web durante la ventana configurada. Despues duerme profundamente hasta el proximo ciclo. Solo consume corriente al estar activo.
+          Al despertar: lee el sensor, conecta WiFi (con timeout), envia datos a Grafana, luego abre el servidor web durante la ventana configurada. Despues duerme profundamente hasta el proximo ciclo. Solo consume corriente al estar activo.
         </div>
       </div>
 
@@ -808,7 +808,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
         <div>
           <label for="wifiRetry">Intervalo de reintento WiFi (segundos)</label>
           <input id="wifiRetry" name="wifiRetry" type="number" min="10" max="3600" step="1">
-          <div class="hint">Cada cuantos segundos reintenta conectar a la red si se desconecta. 120 = 2 min.</div>
+          <div class="hint">Cada cuantos segundos reintenta conectar a la red si se desconecta. 30 = recuperacion rapida.</div>
         </div>
       </div>
 
@@ -1256,7 +1256,7 @@ async function loadPowerConfig() {
     powerEl.sleepInterval.value = d.sleep_interval_sec ?? 300;
     powerEl.webWindow.value = d.web_window_sec ?? 60;
     powerEl.wifiTimeout.value = d.wifi_timeout_ms ?? 20000;
-    powerEl.wifiRetry.value = d.wifi_retry_interval_sec ?? 120;
+    powerEl.wifiRetry.value = d.wifi_retry_interval_sec ?? 30;
     applyPowerModeUi(d.mode || 'normal');
   } catch (error) {
     showMessage(powerEl.message, 'err', error.message || 'Error cargando config de energia.');

@@ -1,0 +1,222 @@
+apiVersion: 1
+
+# Reglas de alerta para nivel de cisterna.
+# Datasource: InfluxDB 1.x con database "cto", measurement "cisterna".
+# Telemetria publicada por el firmware (ESP32):
+#   tag:    device=<device_name>
+#   fields: level (%), distance (cm), volume (L), sensor_ok (0|1),
+#           sensor_failures (int), sensor_spread_cm (cm),
+#           last_success_age_sec (int), capacity (L),
+#           wifi_connected (0|1), free_heap, uptime_sec
+#
+# Datasource UID: cffjh0ndioglce ("InfluxDB" -> db=cto, en orgId 4 / CTO).
+# Si en algun momento cambia el UID, regenerar con:
+#   curl -s https://grafana.altermundi.net/api/datasources \
+#     | jq '.[] | select(.database=="cto") | .uid'
+
+groups:
+  - orgId: 4
+    name: cisterna
+    folder: Cisterna
+    interval: 1m
+    rules:
+
+      # ------------------------------------------------------------------------
+      # 1) Nivel critico (< 15%)
+      # ------------------------------------------------------------------------
+      - uid: cist-low-level
+        title: Cisterna - Nivel critico
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: critical
+          kind: level_low
+        annotations:
+          summary: "Cisterna {{ $labels.device }} con nivel critico"
+          description: "Nivel por debajo del 15%. Revisar provision de agua."
+          value: "{{ printf \"%.1f\" $values.B.Value }}%"
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: cffjh0ndioglce
+            model:
+              refId: A
+              datasource:
+                type: influxdb
+                uid: cffjh0ndioglce
+              query: |
+                SELECT last("level") FROM "cisterna"
+                WHERE $timeFilter
+                GROUP BY "device" fill(none)
+              rawQuery: true
+              resultFormat: time_series
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [15] }
+                  # Grafana 11.3+: descarga la alerta cuando level vuelve a >= 30
+                  unloadEvaluator: { type: gt, params: [30] }
+
+      # ------------------------------------------------------------------------
+      # 2) Rebalse inminente (> 95%)
+      # ------------------------------------------------------------------------
+      - uid: cist-overflow
+        title: Cisterna - Riesgo de rebalse
+        condition: C
+        for: 1m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: warning
+          kind: level_high
+        annotations:
+          summary: "Cisterna {{ $labels.device }} cerca del rebalse"
+          description: "Nivel por encima del 95%. Considerar cortar la bomba/aporte de agua."
+          value: "{{ printf \"%.1f\" $values.B.Value }}%"
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: cffjh0ndioglce
+            model:
+              refId: A
+              datasource:
+                type: influxdb
+                uid: cffjh0ndioglce
+              query: |
+                SELECT last("level") FROM "cisterna"
+                WHERE $timeFilter
+                GROUP BY "device" fill(none)
+              rawQuery: true
+              resultFormat: time_series
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [95] }
+                  # Grafana 11.3+: descarga la alerta cuando level baja a <= 90
+                  unloadEvaluator: { type: lt, params: [90] }
+
+      # ------------------------------------------------------------------------
+      # 3) Sensor con falla (sensor_ok == 0)
+      # ------------------------------------------------------------------------
+      - uid: cist-sensor-fault
+        title: Cisterna - Sensor caido
+        condition: C
+        for: 2m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: warning
+          kind: sensor_fault
+        annotations:
+          summary: "Cisterna {{ $labels.device }} con sensor en falla"
+          description: "El ESP32 reporta sensor_ok=0 (lecturas consecutivas invalidas)."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: cffjh0ndioglce
+            model:
+              refId: A
+              datasource:
+                type: influxdb
+                uid: cffjh0ndioglce
+              query: |
+                SELECT last("sensor_ok") FROM "cisterna"
+                WHERE $timeFilter
+                GROUP BY "device" fill(none)
+              rawQuery: true
+              resultFormat: time_series
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+
+      # ------------------------------------------------------------------------
+      # 4) Sin datos (firmware offline / WiFi caido / Grafana inalcanzable)
+      # ------------------------------------------------------------------------
+      - uid: cist-no-data
+        title: Cisterna - Sin datos
+        condition: C
+        for: 30m
+        # Aca el truco: usamos noDataState=Alerting para que dispare cuando la query
+        # devuelve cero series (no llegan puntos en la ventana relativa).
+        noDataState: Alerting
+        execErrState: Error
+        labels:
+          severity: warning
+          kind: no_data
+        annotations:
+          summary: "Cisterna sin datos hace mas de 30 min"
+          description: "No llegan puntos a InfluxDB. Revisar firmware, WiFi o conectividad a Grafana."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: cffjh0ndioglce
+            model:
+              refId: A
+              datasource:
+                type: influxdb
+                uid: cffjh0ndioglce
+              query: |
+                SELECT count("level") FROM "cisterna"
+                WHERE $timeFilter
+                GROUP BY "device" fill(0)
+              rawQuery: true
+              resultFormat: time_series
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              reducer: sum
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
