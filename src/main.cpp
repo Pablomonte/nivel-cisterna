@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
@@ -16,6 +17,8 @@
 #include "power_manager.h"
 
 WebServer server(80);
+DNSServer dnsServer;
+bool dnsServerActive = false;
 Tank tank;
 LevelSensor sensor;
 GrafanaReporter grafana;
@@ -299,6 +302,16 @@ void startAccessPoint(bool withStation) {
              deviceName.c_str(),
              WiFi.softAPIP().toString().c_str(),
              hasPass ? "(password protected)" : "(open)");
+
+    if (!dnsServerActive) {
+        dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+        if (dnsServer.start(53, "*", WiFi.softAPIP())) {
+            dnsServerActive = true;
+            DBG_INFOLN("[WiFi] Captive DNS server up on port 53");
+        } else {
+            DBG_ERRORLN("[WiFi] Failed to start captive DNS server");
+        }
+    }
 }
 
 void connectWiFi() {
@@ -917,10 +930,37 @@ void setupOTA() {
              otaPwd.length() > 0 ? "yes" : "no");
 }
 
+void handleCaptivePortalProbe() {
+    // Los SO (Android, iOS, Windows, Firefox) consultan endpoints conocidos
+    // para detectar portal cautivo. Devolver 302 a "/" hace que abran el
+    // navegador automaticamente en el dashboard.
+    server.sendHeader("Location", "/", true);
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(302, "text/plain", "");
+}
+
+void registerCaptivePortalProbes() {
+    static const char* const PROBE_PATHS[] = {
+        "/generate_204",
+        "/gen_204",
+        "/hotspot-detect.html",
+        "/library/test/success.html",
+        "/connecttest.txt",
+        "/ncsi.txt",
+        "/redirect",
+        "/canonical.html",
+        "/success.txt"
+    };
+    for (auto path : PROBE_PATHS) {
+        server.on(path, HTTP_GET, handleCaptivePortalProbe);
+    }
+}
+
 void registerRoutes() {
     server.on("/", HTTP_GET, handleRoot);
     server.on("/wifi", HTTP_GET, handleWifiPage);
     server.on("/config", HTTP_GET, handleWifiPage);
+    registerCaptivePortalProbes();
     server.on("/api/status", HTTP_GET, handleApiStatus);
     server.on("/api/config", HTTP_GET, handleApiConfig);
     server.on("/api/config", HTTP_POST, handleApiConfig);
@@ -969,11 +1009,18 @@ void runBatteryModeCycle() {
     powerManager.startWebWindow();
     while (powerManager.isWebWindowActive()) {
         ArduinoOTA.handle();
+        if (dnsServerActive) {
+            dnsServer.processNextRequest();
+        }
         server.handleClient();
         sensor.update();
         delay(10);
     }
 
+    if (dnsServerActive) {
+        dnsServer.stop();
+        dnsServerActive = false;
+    }
     powerManager.enterDeepSleep();
 }
 
@@ -1059,6 +1106,9 @@ void setup() {
 
 void loop() {
     ArduinoOTA.handle();
+    if (dnsServerActive) {
+        dnsServer.processNextRequest();
+    }
     server.handleClient();
     cleanupTimedOutWiFiScan();
     maintainWiFi();
