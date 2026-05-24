@@ -918,6 +918,7 @@ void setupOTA() {
 void registerRoutes() {
     server.on("/", HTTP_GET, handleRoot);
     server.on("/wifi", HTTP_GET, handleWifiPage);
+    server.on("/config", HTTP_GET, handleWifiPage);
     server.on("/api/status", HTTP_GET, handleApiStatus);
     server.on("/api/config", HTTP_GET, handleApiConfig);
     server.on("/api/config", HTTP_POST, handleApiConfig);

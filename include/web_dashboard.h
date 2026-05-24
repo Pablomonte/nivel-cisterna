@@ -264,7 +264,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </div>
 
 <div class="actions">
-  <a class="button-link" href="/wifi">Administracion WiFi</a>
+  <a class="button-link" href="/wifi">Configuracion</a>
 </div>
 
 <div class="device-name" id="deviceName"></div>
@@ -340,7 +340,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Administracion WiFi</title>
+<title>Configuracion del dispositivo</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -621,8 +621,8 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
 <body>
 <div class="shell">
   <div class="header">
-    <h1>Administracion WiFi</h1>
-    <div class="subtle">Configura la red cliente del ESP32 y el nombre del dispositivo. El nombre del dispositivo tambien se usa como SSID del punto de acceso del equipo.</div>
+    <h1>Configuracion del dispositivo</h1>
+    <div class="subtle">Estado en vivo, conexion WiFi, calibracion del sensor, modo de energia y acceso admin del equipo.</div>
   </div>
 
   <div class="card">
@@ -656,7 +656,8 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   </div>
 
   <div class="card">
-    <h2>Configuracion</h2>
+    <h2>Red WiFi</h2>
+    <div class="subtle" style="margin-bottom: 0.9rem;">Configura el nombre del dispositivo y la red a la que se conecta. El nombre tambien se usa como SSID del AP del equipo.</div>
     <form id="wifiForm">
       <div>
         <label for="deviceName">Nombre del dispositivo / SSID del AP</label>
@@ -691,49 +692,12 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
       </div>
     </form>
     <div class="message" id="formMessage"></div>
-  </div>
 
-  <div class="card">
-    <h2>Redes detectadas</h2>
-    <div class="subtle" style="margin-bottom: 0.9rem;">Selecciona una red para completar el SSID automaticamente. El escaneo puede tardar unos segundos.</div>
+    <div class="subtle" style="margin: 1rem 0 0.6rem;">Redes detectadas</div>
     <div class="network-list" id="networkList">
       <div class="subtle">Todavia no se escanearon redes.</div>
     </div>
     <div class="message" id="scanMessage"></div>
-  </div>
-
-  <div class="card">
-    <h2>Acceso admin</h2>
-    <div class="subtle" style="margin-bottom: 0.9rem;">Cambia la contraseña usada por el dashboard y la API. Si no hay una configurada, se usa la derivada del MAC (cisterna-XXXXXX).</div>
-    <form id="adminPwdForm">
-      <div id="currentPwdRow">
-        <label for="currentAdminPass">Contraseña actual</label>
-        <div class="pwd-wrap">
-          <input id="currentAdminPass" type="password" autocomplete="current-password" minlength="8" maxlength="64">
-          <button type="button" class="pwd-toggle" data-target="currentAdminPass" aria-label="Mostrar contraseña">Ver</button>
-        </div>
-        <div class="hint">Si nunca configuraste una, dejala vacia (se acepta solo en el primer cambio).</div>
-      </div>
-      <div>
-        <label for="newAdminPass">Nueva contraseña</label>
-        <div class="pwd-wrap">
-          <input id="newAdminPass" type="password" autocomplete="new-password" minlength="8" maxlength="64" required>
-          <button type="button" class="pwd-toggle" data-target="newAdminPass" aria-label="Mostrar contraseña">Ver</button>
-        </div>
-        <div class="hint">8 a 64 caracteres.</div>
-      </div>
-      <div>
-        <label for="confirmAdminPass">Confirmar nueva</label>
-        <div class="pwd-wrap">
-          <input id="confirmAdminPass" type="password" autocomplete="new-password" minlength="8" maxlength="64" required>
-          <button type="button" class="pwd-toggle" data-target="confirmAdminPass" aria-label="Mostrar contraseña">Ver</button>
-        </div>
-      </div>
-      <div class="actions">
-        <button class="primary" type="submit">Cambiar contraseña</button>
-      </div>
-    </form>
-    <div class="message" id="adminPwdMessage"></div>
   </div>
 
   <div class="card">
@@ -817,6 +781,40 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
       </div>
     </form>
     <div class="message" id="powerMessage"></div>
+  </div>
+
+  <div class="card">
+    <h2>Acceso admin</h2>
+    <div class="subtle" style="margin-bottom: 0.9rem;">Cambia la contraseña usada por el dashboard y la API. Si no hay una configurada, se usa la derivada del MAC (cisterna-XXXXXX).</div>
+    <form id="adminPwdForm">
+      <div id="currentPwdRow">
+        <label for="currentAdminPass">Contraseña actual</label>
+        <div class="pwd-wrap">
+          <input id="currentAdminPass" type="password" autocomplete="current-password" minlength="8" maxlength="64">
+          <button type="button" class="pwd-toggle" data-target="currentAdminPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+        <div class="hint">Si nunca configuraste una, dejala vacia (se acepta solo en el primer cambio).</div>
+      </div>
+      <div>
+        <label for="newAdminPass">Nueva contraseña</label>
+        <div class="pwd-wrap">
+          <input id="newAdminPass" type="password" autocomplete="new-password" minlength="8" maxlength="64" required>
+          <button type="button" class="pwd-toggle" data-target="newAdminPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+        <div class="hint">8 a 64 caracteres.</div>
+      </div>
+      <div>
+        <label for="confirmAdminPass">Confirmar nueva</label>
+        <div class="pwd-wrap">
+          <input id="confirmAdminPass" type="password" autocomplete="new-password" minlength="8" maxlength="64" required>
+          <button type="button" class="pwd-toggle" data-target="confirmAdminPass" aria-label="Mostrar contraseña">Ver</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Cambiar contraseña</button>
+      </div>
+    </form>
+    <div class="message" id="adminPwdMessage"></div>
   </div>
 </div>
 
