@@ -57,6 +57,25 @@ struct WifiScanState {
 
 WifiScanState wifiScan = {};
 
+// Guard defensivo contra escrituras de config solapadas. WebServer es
+// single-threaded, asi que en condiciones normales esto nunca se gatilla;
+// sirve por si algun handler cede tiempo (yield, SPIFFS lento) y otra
+// request reentrante intenta escribir simultaneamente.
+volatile bool configWriteBusy = false;
+
+struct ConfigWriteGuard {
+    bool acquired;
+    ConfigWriteGuard() : acquired(false) {
+        if (!configWriteBusy) {
+            configWriteBusy = true;
+            acquired = true;
+        }
+    }
+    ~ConfigWriteGuard() {
+        if (acquired) configWriteBusy = false;
+    }
+};
+
 String deriveDefaultPassword() {
     uint64_t mac = ESP.getEfuseMac();
     char buf[24];
@@ -465,6 +484,12 @@ void handleApiWifiSettings() {
         return;
     }
 
+    ConfigWriteGuard guard;
+    if (!guard.acquired) {
+        server.send(409, "application/json", "{\"error\":\"busy_try_again\"}");
+        return;
+    }
+
     if (!server.hasArg("plain")) {
         server.send(400, "text/plain", "No body");
         return;
@@ -521,6 +546,12 @@ void handleApiAdminPassword() {
 
     if (server.method() != HTTP_POST) {
         server.send(405, "text/plain", "Method not allowed");
+        return;
+    }
+
+    ConfigWriteGuard guard;
+    if (!guard.acquired) {
+        server.send(409, "application/json", "{\"error\":\"busy_try_again\"}");
         return;
     }
 
@@ -582,6 +613,12 @@ void handleApiSensorCalibrate() {
         String output;
         serializeJson(doc, output);
         server.send(200, "application/json", output);
+        return;
+    }
+
+    ConfigWriteGuard guard;
+    if (!guard.acquired) {
+        server.send(409, "application/json", "{\"error\":\"busy_try_again\"}");
         return;
     }
 
@@ -778,6 +815,12 @@ void handleApiPower() {
         return;
     }
 
+    ConfigWriteGuard guard;
+    if (!guard.acquired) {
+        server.send(409, "application/json", "{\"error\":\"busy_try_again\"}");
+        return;
+    }
+
     if (!server.hasArg("plain")) {
         server.send(400, "text/plain", "No body");
         return;
@@ -831,6 +874,12 @@ void handleApiConfig() {
         String output;
         serializeJsonPretty(redacted, output);
         server.send(200, "application/json", output);
+        return;
+    }
+
+    ConfigWriteGuard guard;
+    if (!guard.acquired) {
+        server.send(409, "application/json", "{\"error\":\"busy_try_again\"}");
         return;
     }
 

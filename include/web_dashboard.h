@@ -1065,6 +1065,7 @@ document.getElementById('wifiForm').addEventListener('submit', async (event) => 
   event.preventDefault();
   clearMessage(elements.formMessage);
 
+  const submitBtn = event.target.querySelector('button[type="submit"]');
   const payload = {
     device_name: elements.deviceName.value.trim(),
     wifi_ssid: elements.wifiSsid.value.trim()
@@ -1077,6 +1078,7 @@ document.getElementById('wifiForm').addEventListener('submit', async (event) => 
   }
 
   showMessage(elements.formMessage, 'warn', 'Guardando configuracion y reiniciando el equipo...');
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await fetch('/api/wifi/settings', {
@@ -1093,6 +1095,7 @@ document.getElementById('wifiForm').addEventListener('submit', async (event) => 
     showMessage(elements.formMessage, 'ok', message || 'Configuracion guardada. Reiniciando...');
   } catch (error) {
     showMessage(elements.formMessage, 'err', error.message || 'No se pudo guardar la configuracion.');
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
@@ -1119,7 +1122,9 @@ elements.adminPwdForm.addEventListener('submit', async (event) => {
     new: next
   };
 
+  const submitBtn = event.target.querySelector('button[type="submit"]');
   showMessage(elements.adminPwdMessage, 'warn', 'Actualizando contraseña admin...');
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await fetch('/api/admin/password', {
@@ -1139,6 +1144,8 @@ elements.adminPwdForm.addEventListener('submit', async (event) => {
     loadSettings().catch(() => {});
   } catch (error) {
     showMessage(elements.adminPwdMessage, 'err', error.message || 'No se pudo cambiar la contraseña.');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
@@ -1201,7 +1208,9 @@ elements.sensorCalForm.addEventListener('submit', async (event) => {
     sensor: { offset_cm: offset }
   };
 
+  const submitBtn = event.target.querySelector('button[type="submit"]');
   showMessage(elements.sensorCalMessage, 'warn', 'Guardando calibracion...');
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await fetch('/api/sensor/calibrate', {
@@ -1215,6 +1224,8 @@ elements.sensorCalForm.addEventListener('submit', async (event) => {
     refreshLiveReading();
   } catch (error) {
     showMessage(elements.sensorCalMessage, 'err', error.message || 'No se pudo guardar la calibracion.');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
@@ -1279,7 +1290,9 @@ powerEl.form.addEventListener('submit', async (event) => {
     wifi_retry_interval_sec: parseInt(powerEl.wifiRetry.value, 10)
   };
 
+  const submitBtn = event.target.querySelector('button[type="submit"]');
   showMessage(powerEl.message, 'warn', 'Guardando y reiniciando...');
+  if (submitBtn) submitBtn.disabled = true;
 
   try {
     const response = await fetch('/api/power', {
@@ -1292,6 +1305,7 @@ powerEl.form.addEventListener('submit', async (event) => {
     showMessage(powerEl.message, 'ok', text || 'Configuracion guardada. Reiniciando...');
   } catch (error) {
     showMessage(powerEl.message, 'err', error.message || 'Error al guardar.');
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
