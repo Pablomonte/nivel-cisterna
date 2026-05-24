@@ -305,6 +305,16 @@ void startAccessPoint(bool withStation) {
     wifi_mode_t mode = withStation ? WIFI_AP_STA : WIFI_AP;
     WiFi.mode(mode);
 
+    // Configurar AP explicitamente: IP, gateway y subnet identicos a la IP del
+    // AP. Esto garantiza que el servidor DHCP integrado anuncie al propio ESP
+    // como DNS server (necesario para que el portal cautivo intercepte las
+    // consultas DNS de los clientes que se asocian al AP).
+    IPAddress apIp(192, 168, 4, 1);
+    IPAddress apMask(255, 255, 255, 0);
+    if (!WiFi.softAPConfig(apIp, apIp, apMask)) {
+        DBG_ERRORLN("[WiFi] softAPConfig failed");
+    }
+
     bool hasPass = hasEffectiveAdminPassword();
     bool started = hasPass
         ? WiFi.softAP(deviceName.c_str(), getAdminPassword().c_str())
@@ -324,9 +334,11 @@ void startAccessPoint(bool withStation) {
 
     if (!dnsServerActive) {
         dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+        dnsServer.setTTL(60);
         if (dnsServer.start(53, "*", WiFi.softAPIP())) {
             dnsServerActive = true;
-            DBG_INFOLN("[WiFi] Captive DNS server up on port 53");
+            DBG_INFO("[WiFi] Captive DNS server up on %s:53 (wildcard)\n",
+                     WiFi.softAPIP().toString().c_str());
         } else {
             DBG_ERRORLN("[WiFi] Failed to start captive DNS server");
         }
@@ -980,12 +992,25 @@ void setupOTA() {
 }
 
 void handleCaptivePortalProbe() {
-    // Los SO (Android, iOS, Windows, Firefox) consultan endpoints conocidos
-    // para detectar portal cautivo. Devolver 302 a "/" hace que abran el
-    // navegador automaticamente en el dashboard.
-    server.sendHeader("Location", "/", true);
-    server.sendHeader("Cache-Control", "no-store");
-    server.send(302, "text/plain", "");
+    // Los SO consultan endpoints conocidos para detectar portal cautivo:
+    //  - Android: /generate_204 espera 204. Cualquier otra cosa dispara la
+    //    notificacion "Iniciar sesion en la red" y autoabre el navegador.
+    //  - iOS: /hotspot-detect.html y /library/test/success.html esperan HTML
+    //    con la palabra "Success". Si no aparece, se abre el sheet del portal.
+    //  - Windows: /connecttest.txt y /ncsi.txt esperan contenido especifico.
+    // Servimos una pagina HTML minima con meta-refresh + JS redirect al
+    // dashboard. NO contiene "Success" para iOS y NO retorna 204 para Android.
+    DBG_INFO("[CAPTIVE] probe hit: %s\n", server.uri().c_str());
+    server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    server.sendHeader("Pragma", "no-cache");
+    const char* body =
+        "<!DOCTYPE html><html><head>"
+        "<meta http-equiv=\"refresh\" content=\"0; url=http://192.168.4.1/\">"
+        "<title>Cisterna</title></head>"
+        "<body><script>location.href='http://192.168.4.1/';</script>"
+        "<a href=\"http://192.168.4.1/\">Abrir panel del dispositivo</a>"
+        "</body></html>";
+    server.send(200, "text/html", body);
 }
 
 void registerCaptivePortalProbes() {
@@ -998,7 +1023,10 @@ void registerCaptivePortalProbes() {
         "/ncsi.txt",
         "/redirect",
         "/canonical.html",
-        "/success.txt"
+        "/success.txt",
+        "/check_network_status.txt",
+        "/mobile/status.php",
+        "/fwlink"
     };
     for (auto path : PROBE_PATHS) {
         server.on(path, HTTP_GET, handleCaptivePortalProbe);
@@ -1029,8 +1057,11 @@ void registerRoutes() {
             server.send(404, "application/json", "{\"error\":\"not_found\"}");
             return;
         }
-        server.sendHeader("Location", "/", true);
-        server.send(302, "text/plain", "");
+        // Cualquier URL desconocida cuenta como probe del portal cautivo.
+        DBG_INFO("[CAPTIVE] notFound: host=%s uri=%s\n",
+                 server.hostHeader().c_str(),
+                 server.uri().c_str());
+        handleCaptivePortalProbe();
     });
 }
 
