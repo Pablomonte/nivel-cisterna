@@ -677,13 +677,8 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
           <input id="wifiPass" name="wifiPass" type="password" placeholder="Dejar vacio para conservar la actual" minlength="8" maxlength="63">
           <button type="button" class="pwd-toggle" data-target="wifiPass" aria-label="Mostrar contraseña">Ver</button>
         </div>
-        <div class="hint">8-63 caracteres (WPA2). Completa solo si quieres cambiarla. Para redes abiertas, marca la opcion de borrar password.</div>
+        <div class="hint">8-63 caracteres (WPA2). Dejar vacio conserva la actual. Las redes abiertas se detectan automaticamente del escaneo.</div>
       </div>
-
-      <label class="inline-option">
-        <input id="clearPassword" type="checkbox">
-        <span>Borrar password WiFi guardada</span>
-      </label>
 
       <div class="actions">
         <button class="primary" type="submit">Guardar y reiniciar</button>
@@ -823,7 +818,6 @@ const elements = {
   deviceName: document.getElementById('deviceName'),
   wifiSsid: document.getElementById('wifiSsid'),
   wifiPass: document.getElementById('wifiPass'),
-  clearPassword: document.getElementById('clearPassword'),
   scanButton: document.getElementById('scanButton'),
   networkList: document.getElementById('networkList'),
   formMessage: document.getElementById('formMessage'),
@@ -867,6 +861,7 @@ document.querySelectorAll('.pwd-toggle').forEach((btn) => {
 let selectedSsid = '';
 let scanPollToken = 0;
 let scanStartedAt = 0;
+const openSsids = new Set();
 
 function showMessage(target, tone, text) {
   target.className = 'message show ' + tone;
@@ -894,6 +889,13 @@ function normalizeNetworks(networks) {
 
 function renderNetworks(networks) {
   const list = normalizeNetworks(networks);
+
+  openSsids.clear();
+  list.forEach((network) => {
+    if (network.ssid && !network.secure) {
+      openSsids.add(network.ssid);
+    }
+  });
 
   if (!list.length) {
     elements.networkList.innerHTML = '<div class="subtle">No se encontraron redes visibles.</div>';
@@ -975,7 +977,9 @@ async function loadSettings() {
 async function scanNetworks() {
   clearMessage(elements.scanMessage);
   showMessage(elements.scanMessage, 'warn', 'Escaneando redes cercanas...');
+  const originalScanLabel = elements.scanButton.textContent;
   elements.scanButton.disabled = true;
+  elements.scanButton.textContent = 'Escaneando...';
   const currentToken = ++scanPollToken;
   scanStartedAt = Date.now();
 
@@ -995,6 +999,7 @@ async function scanNetworks() {
   } finally {
     if (currentToken === scanPollToken) {
       elements.scanButton.disabled = false;
+      elements.scanButton.textContent = originalScanLabel;
     }
   }
 }
@@ -1065,10 +1070,10 @@ document.getElementById('wifiForm').addEventListener('submit', async (event) => 
     wifi_ssid: elements.wifiSsid.value.trim()
   };
 
-  if (elements.clearPassword.checked) {
-    payload.wifi_pass = '';
-  } else if (elements.wifiPass.value.length > 0) {
+  if (elements.wifiPass.value.length > 0) {
     payload.wifi_pass = elements.wifiPass.value;
+  } else if (payload.wifi_ssid && openSsids.has(payload.wifi_ssid)) {
+    payload.wifi_pass = '';
   }
 
   showMessage(elements.formMessage, 'warn', 'Guardando configuracion y reiniciando el equipo...');

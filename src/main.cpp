@@ -479,6 +479,8 @@ void handleApiWifiSettings() {
         updatedConfig["wifi_ssid"] = trimCopy(patch["wifi_ssid"].as<String>());
     }
     if (!patch["wifi_pass"].isNull()) {
+        // Password vacio explicito = red abierta detectada por el frontend.
+        // Si el campo no viene en el patch, se conserva la actual.
         updatedConfig["wifi_pass"] = patch["wifi_pass"] | "";
     }
 
