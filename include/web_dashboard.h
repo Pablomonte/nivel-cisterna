@@ -260,7 +260,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </div>
 
 <div class="actions">
-  <a class="button-link" href="/wifi">Configuracion</a>
+  <a class="button-link" href="/config">Configuracion</a>
 </div>
 
 <div class="device-name" id="deviceName"></div>
@@ -612,15 +612,103 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
       width: 100%;
     }
   }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-top);
+    padding: 0.9rem 0 0;
+    margin: -1rem -1rem 1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .topbar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .topbar-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #e0f2fe;
+    letter-spacing: 0.01em;
+  }
+
+  .topbar-back {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .topbar-back:hover {
+    color: var(--text);
+  }
+
+  .tabbar {
+    display: flex;
+    gap: 0.2rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -1rem;
+    padding: 0 1rem;
+  }
+
+  .tabbar::-webkit-scrollbar { display: none; }
+
+  .tab {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 0.7rem 1rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    white-space: nowrap;
+  }
+
+  .tab[aria-selected="true"] {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab:hover {
+    color: var(--text);
+  }
+
+  [role="tabpanel"][hidden] {
+    display: none;
+  }
 </style>
 </head>
 <body>
 <div class="shell">
-  <div class="header">
-    <h1>Configuracion del dispositivo</h1>
-    <div class="subtle">Estado en vivo, conexion WiFi, calibracion del sensor, modo de energia y acceso admin del equipo.</div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="topbar-title">Cisterna · Configuracion</div>
+      <a class="topbar-back" href="/">← Dashboard</a>
+    </div>
+    <div class="tabbar" role="tablist">
+      <button class="tab" role="tab" data-target="panel-wifi" aria-selected="true">WiFi</button>
+      <button class="tab" role="tab" data-target="panel-sensor" aria-selected="false">Calibracion</button>
+      <button class="tab" role="tab" data-target="panel-power" aria-selected="false">Energia</button>
+      <button class="tab" role="tab" data-target="panel-admin" aria-selected="false">Admin</button>
+    </div>
   </div>
 
+  <section id="panel-wifi" role="tabpanel" aria-labelledby="tab-wifi">
   <div class="card">
     <h2>Estado actual</h2>
     <div class="status-grid">
@@ -679,7 +767,6 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
       <div class="actions">
         <button class="primary" type="submit">Guardar y reiniciar</button>
         <button class="secondary" type="button" id="scanButton">Escanear redes</button>
-        <a class="nav-link" href="/">Volver al dashboard</a>
       </div>
     </form>
     <div class="message" id="formMessage"></div>
@@ -690,7 +777,9 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     </div>
     <div class="message" id="scanMessage"></div>
   </div>
+  </section>
 
+  <section id="panel-sensor" role="tabpanel" aria-labelledby="tab-sensor" hidden>
   <div class="card">
     <h2>Calibracion del sensor</h2>
     <div class="subtle" style="margin-bottom: 0.9rem;">
@@ -720,7 +809,9 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     </form>
     <div class="message" id="sensorCalMessage"></div>
   </div>
+  </section>
 
+  <section id="panel-power" role="tabpanel" aria-labelledby="tab-power" hidden>
   <div class="card">
     <h2>Modo de energia</h2>
     <div class="subtle" style="margin-bottom: 0.9rem;">
@@ -773,7 +864,9 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     </form>
     <div class="message" id="powerMessage"></div>
   </div>
+  </section>
 
+  <section id="panel-admin" role="tabpanel" aria-labelledby="tab-admin" hidden>
   <div class="card">
     <h2>Acceso admin</h2>
     <div class="subtle" style="margin-bottom: 0.9rem;">Cambia la contraseña usada por el dashboard y la API. Si no hay una configurada, se usa la derivada del MAC (cisterna-XXXXXX).</div>
@@ -807,9 +900,42 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     </form>
     <div class="message" id="adminPwdMessage"></div>
   </div>
+  </section>
 </div>
 
 <script>
+// Tab switcher: activa el panel correspondiente al hash de la URL.
+// Mantiene compatibilidad con browser back/forward usando replaceState.
+const TAB_HASHES = ['wifi', 'sensor', 'power', 'admin'];
+
+function activateTab(hash) {
+  const target = TAB_HASHES.includes(hash) ? hash : 'wifi';
+  document.querySelectorAll('.tab').forEach(btn => {
+    const isActive = btn.dataset.target === 'panel-' + target;
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+    panel.hidden = panel.id !== 'panel-' + target;
+  });
+  if (location.hash !== '#' + target) {
+    history.replaceState(null, '', '#' + target);
+  }
+}
+
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.target.replace(/^panel-/, '');
+    activateTab(target);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  });
+});
+
+window.addEventListener('hashchange', () => {
+  activateTab(location.hash.replace(/^#/, ''));
+});
+
+activateTab(location.hash.replace(/^#/, ''));
+
 const elements = {
   deviceName: document.getElementById('deviceName'),
   wifiSsid: document.getElementById('wifiSsid'),
