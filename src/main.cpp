@@ -1006,12 +1006,13 @@ void handleCaptivePortalProbe() {
     DBG_INFO("[CAPTIVE] probe hit: %s\n", server.uri().c_str());
     server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     server.sendHeader("Pragma", "no-cache");
-    const char* body =
-        "<!DOCTYPE html><html><head>"
-        "<meta http-equiv=\"refresh\" content=\"0; url=http://192.168.4.1/\">"
+    String apIp = WiFi.softAPIP().toString();
+    String redirectUrl = "http://" + apIp + "/";
+    String body = "<!DOCTYPE html><html><head>"
+        "<meta http-equiv=\"refresh\" content=\"0; url=" + redirectUrl + "\">"
         "<title>Cisterna</title></head>"
-        "<body><script>location.href='http://192.168.4.1/';</script>"
-        "<a href=\"http://192.168.4.1/\">Abrir panel del dispositivo</a>"
+        "<body><script>location.href='" + redirectUrl + "';</script>"
+        "<a href=\"" + redirectUrl + "\">Abrir panel del dispositivo</a>"
         "</body></html>";
     server.send(200, "text/html", body);
 }
