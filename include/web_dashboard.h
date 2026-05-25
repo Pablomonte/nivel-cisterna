@@ -9,14 +9,35 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cisterna Monitor</title>
 <style>
+  :root {
+    --bg:           #f1f5f9;
+    --bg-elevated:  #ffffff;
+    --bg-soft:      #f8fafc;
+    --border:       #e2e8f0;
+    --border-soft:  #f1f5f9;
+    --text:         #0f172a;
+    --text-muted:   #475569;
+    --text-subtle:  #94a3b8;
+    --accent:       #0284c7;
+    --accent-soft:  #e0f2fe;
+    --accent-hover: #0369a1;
+    --ok:           #16a34a;
+    --ok-soft:      #dcfce7;
+    --warn:         #d97706;
+    --warn-soft:    #fef3c7;
+    --err:          #dc2626;
+    --err-soft:     #fee2e2;
+    --shadow-card:  0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --radius:       12px;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    background:
-      radial-gradient(circle at top, rgba(56, 189, 248, 0.12), transparent 35%),
-      linear-gradient(180deg, #020617 0%, #0f172a 100%);
-    color: #e2e8f0;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -27,21 +48,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   h1 {
     font-size: 1.35rem;
     font-weight: 700;
-    color: #7dd3fc;
+    color: var(--text);
     margin-bottom: 1rem;
     text-align: center;
   }
 
   .card {
-    background: rgba(15, 23, 42, 0.86);
-    border-radius: 14px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius);
     padding: 1rem;
     margin-bottom: 1rem;
     width: 100%;
     max-width: 440px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    box-shadow: 0 18px 36px rgba(2, 6, 23, 0.35);
-    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-card);
   }
 
   .tank-container {
@@ -54,18 +74,18 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   .tank {
     width: 122px;
     height: 204px;
-    border: 3px solid #475569;
+    border: 3px solid var(--border);
     border-radius: 0 0 14px 14px;
     border-top: none;
     position: relative;
     overflow: hidden;
-    background: rgba(2, 6, 23, 0.9);
+    background: var(--bg-soft);
   }
 
   .tank-top {
     width: 138px;
     height: 8px;
-    background: #475569;
+    background: var(--border);
     border-radius: 4px 4px 0 0;
   }
 
@@ -78,30 +98,30 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     transition: height 0.8s ease;
   }
 
-  .water.low { background: linear-gradient(180deg, #fb7185 0%, #dc2626 100%); }
-  .water.mid { background: linear-gradient(180deg, #38bdf8 0%, #0369a1 100%); }
-  .water.high { background: linear-gradient(180deg, #6ee7b7 0%, #059669 100%); }
+  .water.low { background: linear-gradient(180deg, #f87171 0%, #dc2626 100%); }
+  .water.mid { background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%); }
+  .water.high { background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%); }
 
   .level-text {
     font-size: 2.4rem;
     font-weight: 700;
     margin-top: 0.75rem;
-    color: #f8fafc;
+    color: var(--text);
   }
 
   .level-text span {
     font-size: 1.1rem;
-    color: #94a3b8;
+    color: var(--text-muted);
   }
 
   .uncalibrated-badge {
     display: none;
     margin-top: 0.6rem;
     padding: 0.4rem 0.8rem;
-    background: rgba(245, 158, 11, 0.18);
-    border: 1px solid rgba(245, 158, 11, 0.4);
+    background: var(--warn-soft);
+    border: 1px solid var(--warn);
     border-radius: 999px;
-    color: #fde68a;
+    color: var(--warn);
     font-size: 0.82rem;
     font-weight: 600;
     text-decoration: none;
@@ -116,7 +136,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   }
 
   .stat {
-    background: rgba(2, 6, 23, 0.9);
+    background: var(--bg-soft);
+    border: 1px solid var(--border-soft);
     border-radius: 10px;
     padding: 0.9rem;
     text-align: center;
@@ -126,19 +147,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #64748b;
+    color: var(--text-muted);
     margin-bottom: 0.35rem;
   }
 
   .stat-value {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #e2e8f0;
+    color: var(--text);
   }
 
   .stat-unit {
     font-size: 0.8rem;
-    color: #94a3b8;
+    color: var(--text-muted);
   }
 
   .status-row {
@@ -146,7 +167,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     justify-content: space-between;
     align-items: center;
     padding: 0.65rem 0;
-    border-top: 1px solid rgba(148, 163, 184, 0.12);
+    border-top: 1px solid var(--border-soft);
   }
 
   .status-row:first-child {
@@ -156,13 +177,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
   .status-label {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: var(--text-muted);
   }
 
   .status-value {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #e2e8f0;
+    color: var(--text);
     display: flex;
     align-items: center;
     gap: 0.45rem;
@@ -172,15 +193,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #475569;
+    background: var(--border);
   }
 
-  .dot.ok { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); }
-  .dot.warn { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
-  .dot.err { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
+  .dot.err { background: var(--err); box-shadow: 0 0 0 4px var(--err-soft); }
 
   .device-name {
-    color: #94a3b8;
+    color: var(--text-muted);
     font-size: 0.8rem;
     text-align: center;
     margin-top: 0.25rem;
@@ -189,7 +210,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   .footer {
     margin-top: auto;
     padding-top: 0.75rem;
-    color: #475569;
+    color: var(--text-subtle);
     font-size: 0.72rem;
     text-align: center;
   }
@@ -208,10 +229,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     justify-content: center;
     width: 100%;
     padding: 0.9rem 1rem;
-    border-radius: 12px;
-    border: 1px solid rgba(56, 189, 248, 0.25);
-    background: linear-gradient(180deg, rgba(14, 165, 233, 0.18), rgba(2, 132, 199, 0.1));
-    color: #e0f2fe;
+    border-radius: var(--radius);
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #ffffff;
     text-decoration: none;
     font-weight: 600;
   }
@@ -341,25 +362,34 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg-top: #04111d;
-    --bg-bottom: #0b1f33;
-    --panel: rgba(7, 23, 40, 0.88);
-    --panel-border: rgba(148, 163, 184, 0.22);
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --accent: #38bdf8;
-    --accent-strong: #0ea5e9;
-    --ok: #22c55e;
-    --warn: #f59e0b;
-    --err: #ef4444;
+    --bg:           #f1f5f9;
+    --bg-elevated:  #ffffff;
+    --bg-soft:      #f8fafc;
+    --border:       #e2e8f0;
+    --border-soft:  #f1f5f9;
+    --text:         #0f172a;
+    --muted:        #475569;
+    --text-subtle:  #94a3b8;
+    --accent:       #0284c7;
+    --accent-soft:  #e0f2fe;
+    --accent-hover: #0369a1;
+    --ok:           #16a34a;
+    --ok-soft:      #dcfce7;
+    --warn:         #d97706;
+    --warn-soft:    #fef3c7;
+    --err:          #dc2626;
+    --err-soft:     #fee2e2;
+    --shadow-card:  0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --radius:       12px;
+    /* alias para CSS heredado del topbar */
+    --bg-top:       var(--bg);
   }
 
   body {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    background:
-      radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 35%),
-      linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    background: var(--bg);
     color: var(--text);
+    line-height: 1.5;
     min-height: 100vh;
     padding: 1rem;
   }
@@ -376,8 +406,9 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
 
   h1 {
     font-size: 1.6rem;
-    color: #bae6fd;
+    color: var(--text);
     margin-bottom: 0.35rem;
+    font-weight: 700;
   }
 
   .subtle {
@@ -387,19 +418,19 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   }
 
   .card {
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 1rem;
     margin-bottom: 1rem;
-    box-shadow: 0 18px 36px rgba(2, 6, 23, 0.28);
-    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow-card);
   }
 
   .card h2 {
     font-size: 1rem;
     margin-bottom: 0.85rem;
-    color: #e0f2fe;
+    color: var(--text);
+    font-weight: 700;
   }
 
   .status-grid {
@@ -409,7 +440,8 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   }
 
   .status-item {
-    background: rgba(2, 6, 23, 0.45);
+    background: var(--bg-soft);
+    border: 1px solid var(--border-soft);
     border-radius: 12px;
     padding: 0.85rem;
     min-height: 72px;
@@ -437,7 +469,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   label {
     display: block;
     margin-bottom: 0.42rem;
-    color: #cbd5e1;
+    color: var(--text);
     font-size: 0.9rem;
     font-weight: 600;
   }
@@ -447,9 +479,9 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   input[type="number"],
   select {
     width: 100%;
-    border: 1px solid rgba(148, 163, 184, 0.24);
-    border-radius: 12px;
-    background: rgba(2, 6, 23, 0.72);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elevated);
     color: var(--text);
     padding: 0.9rem 0.95rem;
     font-size: 0.96rem;
@@ -461,8 +493,8 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   input[type="password"]:focus,
   input[type="number"]:focus,
   select:focus {
-    border-color: rgba(56, 189, 248, 0.75);
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
   .hint {
@@ -485,20 +517,20 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     right: 0.4rem;
     top: 50%;
     transform: translateY(-50%);
-    background: transparent;
-    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
     color: var(--muted);
     font-size: 0.85rem;
     font-weight: 500;
     padding: 0.4rem 0.6rem;
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     line-height: 1;
   }
 
   .pwd-toggle:hover {
-    color: var(--text);
-    border-color: rgba(56, 189, 248, 0.4);
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   .hidden {
@@ -509,7 +541,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     display: flex;
     align-items: center;
     gap: 0.55rem;
-    color: #cbd5e1;
+    color: var(--text);
     font-size: 0.88rem;
   }
 
@@ -522,10 +554,10 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   button,
   .nav-link {
     border: none;
-    border-radius: 12px;
+    border-radius: var(--radius);
     padding: 0.9rem 1rem;
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     text-decoration: none;
     display: inline-flex;
@@ -534,30 +566,45 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   }
 
   .primary {
-    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
-    color: #082f49;
+    background: var(--accent);
+    color: #ffffff;
+  }
+
+  .primary:hover {
+    background: var(--accent-hover);
+  }
+
+  .primary:disabled {
+    background: var(--text-subtle);
+    cursor: not-allowed;
   }
 
   .secondary,
   .nav-link {
-    background: rgba(15, 23, 42, 0.88);
-    color: #dbeafe;
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: var(--bg-elevated);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .secondary:hover,
+  .nav-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .message {
     display: none;
     margin-top: 0.5rem;
     padding: 0.8rem 0.9rem;
-    border-radius: 12px;
+    border-radius: var(--radius);
     font-size: 0.9rem;
     line-height: 1.4;
   }
 
   .message.show { display: block; }
-  .message.ok { background: rgba(34, 197, 94, 0.12); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.25); }
-  .message.err { background: rgba(239, 68, 68, 0.12); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.25); }
-  .message.warn { background: rgba(245, 158, 11, 0.12); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.25); }
+  .message.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok); }
+  .message.err { background: var(--err-soft); color: var(--err); border: 1px solid var(--err); }
+  .message.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
 
   .network-list {
     display: grid;
@@ -567,14 +614,18 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   .network-item {
     width: 100%;
     text-align: left;
-    background: rgba(2, 6, 23, 0.62);
-    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     color: var(--text);
   }
 
+  .network-item:hover {
+    border-color: var(--accent);
+  }
+
   .network-item.selected {
-    border-color: rgba(56, 189, 248, 0.7);
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
   }
 
   .network-item strong {
@@ -600,8 +651,8 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     font-weight: 700;
   }
 
-  .badge.ok { background: rgba(34, 197, 94, 0.14); color: #bbf7d0; }
-  .badge.warn { background: rgba(245, 158, 11, 0.14); color: #fde68a; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
 
   @media (max-width: 640px) {
     .status-grid {
@@ -617,12 +668,12 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     position: sticky;
     top: 0;
     z-index: 10;
-    background: var(--bg-top);
+    background: var(--bg);
     padding: 0.9rem 0 0;
     margin: -1rem -1rem 1rem;
     padding-left: 1rem;
     padding-right: 1rem;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    border-bottom: 1px solid var(--border);
   }
 
   .topbar-row {
@@ -636,7 +687,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
   .topbar-title {
     font-size: 1.05rem;
     font-weight: 700;
-    color: #e0f2fe;
+    color: var(--text);
     letter-spacing: 0.01em;
   }
 
@@ -647,11 +698,13 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     font-weight: 600;
     padding: 0.35rem 0.6rem;
     border-radius: 8px;
-    border: 1px solid rgba(148, 163, 184, 0.18);
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
   }
 
   .topbar-back:hover {
-    color: var(--text);
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   .tabbar {
