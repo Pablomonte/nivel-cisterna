@@ -64,11 +64,39 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     box-shadow: var(--shadow-card);
   }
 
+  .distance-card {
+    text-align: center;
+    padding: 1.1rem 1rem;
+  }
+
+  .distance-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .distance-value {
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .distance-unit {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin-left: 0.25rem;
+    font-weight: 600;
+  }
+
   .tank-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 0.5rem 0 1rem;
+    gap: 0.6rem;
   }
 
   .tank {
@@ -105,8 +133,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   .level-text {
     font-size: 2.4rem;
     font-weight: 700;
-    margin-top: 0.75rem;
     color: var(--text);
+    line-height: 1;
   }
 
   .level-text span {
@@ -242,23 +270,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
 <h1>Cisterna Monitor</h1>
 
+<div class="card distance-card">
+  <div class="distance-label">Distancia</div>
+  <div class="distance-value"><span id="distVal">--</span><span class="distance-unit">cm</span></div>
+</div>
+
 <div class="card">
   <div class="tank-container">
+    <div class="level-text"><span id="levelVal">--</span><span id="levelUnit">%</span></div>
     <div class="tank-top"></div>
     <div class="tank">
       <div class="water mid" id="water" style="height: 0%"></div>
     </div>
-    <div class="level-text"><span id="levelVal">--</span><span id="levelUnit">%</span></div>
     <a class="uncalibrated-badge" id="uncalBadge" href="/config#sensor">Sin calibrar — configurar</a>
-  </div>
-</div>
-
-<div class="card">
-  <div class="stats" style="grid-template-columns: 1fr;">
-    <div class="stat">
-      <div class="stat-label">Distancia</div>
-      <div class="stat-value"><span id="distVal">--</span> <span class="stat-unit">cm</span></div>
-    </div>
   </div>
 </div>
 
@@ -305,6 +329,10 @@ function updateData() {
       const levelUnit = document.getElementById('levelUnit');
       const uncalBadge = document.getElementById('uncalBadge');
 
+      // Distancia: siempre arriba como medicion directa (data real).
+      document.getElementById('distVal').textContent =
+        distance >= 0 ? distance.toFixed(1) : '--';
+
       if (calibrated) {
         water.style.height = level + '%';
         water.className = 'water ' + (level < 20 ? 'low' : level > 80 ? 'high' : 'mid');
@@ -312,16 +340,13 @@ function updateData() {
         levelUnit.textContent = '%';
         uncalBadge.classList.remove('show');
       } else {
-        // Sin calibrar: tank vacio y el numero grande muestra distancia bruta.
+        // Sin calibrar: tank vacio, sin nivel% (la distancia ya esta arriba).
         water.style.height = '0%';
         water.className = 'water mid';
-        levelVal.textContent = distance >= 0 ? distance.toFixed(1) : '--';
-        levelUnit.textContent = distance >= 0 ? ' cm' : '';
+        levelVal.textContent = '--';
+        levelUnit.textContent = '';
         uncalBadge.classList.add('show');
       }
-
-      document.getElementById('distVal').textContent =
-        distance >= 0 ? distance.toFixed(1) : '--';
 
       document.getElementById('sensorStatus').textContent =
         d.sensor_ok ? 'OK' : 'ERROR';
