@@ -249,7 +249,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="water mid" id="water" style="height: 0%"></div>
     </div>
     <div class="level-text"><span id="levelVal">--</span><span id="levelUnit">%</span></div>
-    <a class="uncalibrated-badge" id="uncalBadge" href="/config">Sin calibrar — configurar</a>
+    <a class="uncalibrated-badge" id="uncalBadge" href="/config#sensor">Sin calibrar — configurar</a>
   </div>
 </div>
 
