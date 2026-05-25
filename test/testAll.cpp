@@ -23,6 +23,10 @@ extern void testAdminPassword_AllowsFirstSetWhenUnconfigured();
 extern void testApplyDefaults_PreservesFloatTankCalibration();
 extern void testApplyDefaults_AppliesFloatDefaultsWhenMissing();
 extern void testArduinoJsonV7_OrOperatorRequiresExactType();
+extern void testConfigWriteGuard_AcquireWhenFreeSetsFlag();
+extern void testConfigWriteGuard_AcquireWhenBusyDoesNotAcquire();
+extern void testConfigWriteGuard_NestedScopesOnlyOwnerReleases();
+extern void testConfigWriteGuard_SequentialAcquireRelease();
 
 void setUp() {}
 void tearDown() {}
@@ -52,5 +56,9 @@ int main() {
     RUN_TEST(testApplyDefaults_PreservesFloatTankCalibration);
     RUN_TEST(testApplyDefaults_AppliesFloatDefaultsWhenMissing);
     RUN_TEST(testArduinoJsonV7_OrOperatorRequiresExactType);
+    RUN_TEST(testConfigWriteGuard_AcquireWhenFreeSetsFlag);
+    RUN_TEST(testConfigWriteGuard_AcquireWhenBusyDoesNotAcquire);
+    RUN_TEST(testConfigWriteGuard_NestedScopesOnlyOwnerReleases);
+    RUN_TEST(testConfigWriteGuard_SequentialAcquireRelease);
     return UNITY_END();
 }
