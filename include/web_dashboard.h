@@ -217,22 +217,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </div>
 
 <div class="card">
-  <div class="stats">
+  <div class="stats" style="grid-template-columns: 1fr;">
     <div class="stat">
       <div class="stat-label">Distancia</div>
       <div class="stat-value"><span id="distVal">--</span> <span class="stat-unit">cm</span></div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Volumen</div>
-      <div class="stat-value"><span id="volVal">--</span> <span class="stat-unit">L</span></div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Capacidad</div>
-      <div class="stat-value"><span id="capVal">--</span> <span class="stat-unit">L</span></div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Ultimo Exito</div>
-      <div class="stat-value"><span id="successAgeVal">--</span> <span class="stat-unit">s</span></div>
     </div>
   </div>
 </div>
@@ -244,14 +232,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <span class="dot" id="sensorDot"></span>
       <span id="sensorStatus">--</span>
     </div>
-  </div>
-  <div class="status-row">
-    <div class="status-label">Lecturas fallidas</div>
-    <div class="status-value" id="sensorFailures">--</div>
-  </div>
-  <div class="status-row">
-    <div class="status-label">Variacion sensor</div>
-    <div class="status-value"><span id="spreadVal">--</span> cm</div>
   </div>
   <div class="status-row">
     <div class="status-label">WiFi</div>
@@ -295,19 +275,9 @@ function updateData() {
 
       document.getElementById('distVal').textContent =
         d.distance >= 0 ? d.distance.toFixed(1) : '--';
-      document.getElementById('volVal').textContent =
-        d.volume >= 0 ? Math.round(d.volume) : '--';
-      document.getElementById('capVal').textContent =
-        d.capacity >= 0 ? Math.round(d.capacity) : '--';
-      document.getElementById('successAgeVal').textContent =
-        d.last_success_age_sec >= 0 ? d.last_success_age_sec : '--';
 
       document.getElementById('sensorStatus').textContent =
         d.sensor_ok ? 'OK' : 'ERROR';
-      document.getElementById('sensorFailures').textContent =
-        d.sensor_failures ?? '--';
-      document.getElementById('spreadVal').textContent =
-        d.sensor_spread_cm >= 0 ? d.sensor_spread_cm.toFixed(1) : '--';
       setDot('sensorDot', d.sensor_ok ? 'ok' : 'err');
 
       document.getElementById('wifiState').textContent =
