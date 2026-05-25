@@ -30,8 +30,12 @@ inline void applyConfigDefaults(JsonDocument& doc) {
     tank["width_cm"] = tank["width_cm"] | 0.0f;
     tank["length_cm"] = tank["length_cm"] | 0.0f;
     tank["capacity_liters"] = tank["capacity_liters"] | 0.0f;
-    tank["empty_distance_cm"] = tank["empty_distance_cm"] | 145.0f;
-    tank["full_distance_cm"] = tank["full_distance_cm"] | 10.0f;
+    // Defaults 0/0 = "sin calibrar". El firmware muestra distancia bruta y
+    // marca el tanque como no calibrado hasta que el usuario configure
+    // ambos valores desde /config -> Calibracion. Esto evita inventar un
+    // nivel% enganoso a partir de defaults inventados.
+    tank["empty_distance_cm"] = tank["empty_distance_cm"] | 0.0f;
+    tank["full_distance_cm"] = tank["full_distance_cm"] | 0.0f;
 
     JsonObject grafana = doc["grafana"];
     if (grafana.isNull()) grafana = doc["grafana"].to<JsonObject>();
@@ -101,8 +105,8 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
     float widthCm = tank["width_cm"] | 0.0f;
     float lengthCm = tank["length_cm"] | 0.0f;
     float capacityLiters = tank["capacity_liters"] | 0.0f;
-    float emptyDistanceCm = tank["empty_distance_cm"] | 145.0f;
-    float fullDistanceCm = tank["full_distance_cm"] | 10.0f;
+    float emptyDistanceCm = tank["empty_distance_cm"] | 0.0f;
+    float fullDistanceCm = tank["full_distance_cm"] | 0.0f;
 
     if (shape != "cylindrical" && shape != "rectangular") {
         error = "tank.shape must be cylindrical or rectangular";
@@ -122,7 +126,16 @@ inline bool validateConfig(const JsonDocument& doc, String& error) {
             return false;
         }
     }
-    if (emptyDistanceCm <= fullDistanceCm) {
+    // 0/0 = sin calibrar (estado valido al boot inicial).
+    // 0/X o X/0 = data parcial -> invalido (el usuario olvido un campo).
+    // empty <= full = datos contradictorios -> invalido.
+    bool bothZero = (emptyDistanceCm == 0.0f && fullDistanceCm == 0.0f);
+    bool eitherZero = (emptyDistanceCm == 0.0f || fullDistanceCm == 0.0f);
+    if (!bothZero && eitherZero) {
+        error = "tank.empty_distance_cm must be greater than tank.full_distance_cm";
+        return false;
+    }
+    if (!bothZero && emptyDistanceCm <= fullDistanceCm) {
         error = "tank.empty_distance_cm must be greater than tank.full_distance_cm";
         return false;
     }

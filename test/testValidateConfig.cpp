@@ -52,7 +52,16 @@ bool validateSensorOffset(float offset, std::string& error) {
 }
 
 bool validateTankCalibration(float emptyCm, float fullCm, std::string& error) {
-    if (emptyCm <= fullCm) {
+    // 0/0 = sin calibrar (estado valido al boot inicial).
+    // 0/X o X/0 = data parcial -> invalido.
+    // empty <= full = datos contradictorios -> invalido.
+    bool bothZero = (emptyCm == 0.0f && fullCm == 0.0f);
+    bool eitherZero = (emptyCm == 0.0f || fullCm == 0.0f);
+    if (!bothZero && eitherZero) {
+        error = "tank.empty_distance_cm must be greater than tank.full_distance_cm";
+        return false;
+    }
+    if (!bothZero && emptyCm <= fullCm) {
         error = "tank.empty_distance_cm must be greater than tank.full_distance_cm";
         return false;
     }
@@ -159,6 +168,17 @@ void testValidateTankCalibration() {
 
     err.clear();
     TEST_ASSERT_FALSE(validateTankCalibration(50.0f, 50.0f, err));
+
+    // 0/0 = sin calibrar: estado valido al boot inicial.
+    err.clear();
+    TEST_ASSERT_TRUE(validateTankCalibration(0.0f, 0.0f, err));
+
+    // Pero 0/algo o algo/0 sigue siendo invalido (datos parciales).
+    err.clear();
+    TEST_ASSERT_FALSE(validateTankCalibration(0.0f, 10.0f, err));
+
+    err.clear();
+    TEST_ASSERT_FALSE(validateTankCalibration(100.0f, 0.0f, err));
 }
 
 bool validatePowerConfig(const std::string& mode, int sleepSec, int webWindowSec,

@@ -28,8 +28,10 @@ private:
         width_cm = 0.0f;
         length_cm = 0.0f;
         capacityOverride_liters = 0.0f;
-        emptyDistance_cm = 145.0f;
-        fullDistance_cm = 10.0f;
+        // 0/0 = sin calibrar (distanceToLevel devolvera -1 hasta que el
+        // usuario configure ambos valores desde la UI).
+        emptyDistance_cm = 0.0f;
+        fullDistance_cm = 0.0f;
     }
 
 public:
@@ -68,15 +70,22 @@ public:
             }
         }
 
-        if (emptyDistance_cm <= fullDistance_cm) {
-            DBG_ERRORLN("[Tank] Invalid calibration, using defaults");
-            emptyDistance_cm = 145.0f;
-            fullDistance_cm = 10.0f;
+        bool uncalibrated = (emptyDistance_cm == 0.0f && fullDistance_cm == 0.0f);
+        if (!uncalibrated && emptyDistance_cm <= fullDistance_cm) {
+            DBG_ERRORLN("[Tank] Invalid calibration (empty <= full), marking uncalibrated");
+            emptyDistance_cm = 0.0f;
+            fullDistance_cm = 0.0f;
+            uncalibrated = true;
         }
 
-        DBG_INFO("[Tank] %s h=%.0f empty=%.0f full=%.0f\n",
+        DBG_INFO("[Tank] %s h=%.0f empty=%.0f full=%.0f%s\n",
                  shape == TANK_RECTANGULAR ? "rectangular" : "cylindrical",
-                 height_cm, emptyDistance_cm, fullDistance_cm);
+                 height_cm, emptyDistance_cm, fullDistance_cm,
+                 uncalibrated ? " (sin calibrar)" : "");
+    }
+
+    bool isCalibrated() const {
+        return emptyDistance_cm > fullDistance_cm && emptyDistance_cm > 0.0f;
     }
 
     float distanceToLevel(float distance_cm) const {

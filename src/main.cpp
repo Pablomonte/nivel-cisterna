@@ -448,6 +448,9 @@ void handleApiStatus() {
     doc["distance"] = sensor.getDistance();
     doc["volume"] = sensor.getVolume();
     doc["capacity"] = tank.getCapacity();
+    doc["tank_calibrated"] = tank.isCalibrated();
+    doc["empty_distance_cm"] = tank.getEmptyDistance();
+    doc["full_distance_cm"] = tank.getFullDistance();
     doc["sensor_ok"] = sensor.isOk();
     doc["sensor_failures"] = sensor.getConsecutiveFailures();
     doc["sensor_spread_cm"] = sensor.getSpreadCm();

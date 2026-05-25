@@ -94,6 +94,21 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     color: #94a3b8;
   }
 
+  .uncalibrated-badge {
+    display: none;
+    margin-top: 0.6rem;
+    padding: 0.4rem 0.8rem;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 999px;
+    color: #fde68a;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .uncalibrated-badge.show { display: inline-block; }
+
   .stats {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -212,7 +227,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="tank">
       <div class="water mid" id="water" style="height: 0%"></div>
     </div>
-    <div class="level-text"><span id="levelVal">--</span><span>%</span></div>
+    <div class="level-text"><span id="levelVal">--</span><span id="levelUnit">%</span></div>
+    <a class="uncalibrated-badge" id="uncalBadge" href="/config">Sin calibrar — configurar</a>
   </div>
 </div>
 
@@ -261,20 +277,30 @@ function updateData() {
     .then(r => r.json())
     .then(d => {
       const level = d.level ?? -1;
+      const distance = d.distance ?? -1;
+      const calibrated = d.tank_calibrated !== false && level >= 0;
       const water = document.getElementById('water');
+      const levelVal = document.getElementById('levelVal');
+      const levelUnit = document.getElementById('levelUnit');
+      const uncalBadge = document.getElementById('uncalBadge');
 
-      if (level >= 0) {
+      if (calibrated) {
         water.style.height = level + '%';
         water.className = 'water ' + (level < 20 ? 'low' : level > 80 ? 'high' : 'mid');
-        document.getElementById('levelVal').textContent = level.toFixed(1);
+        levelVal.textContent = level.toFixed(1);
+        levelUnit.textContent = '%';
+        uncalBadge.classList.remove('show');
       } else {
+        // Sin calibrar: tank vacio y el numero grande muestra distancia bruta.
         water.style.height = '0%';
-        water.className = 'water low';
-        document.getElementById('levelVal').textContent = '--';
+        water.className = 'water mid';
+        levelVal.textContent = distance >= 0 ? distance.toFixed(1) : '--';
+        levelUnit.textContent = distance >= 0 ? ' cm' : '';
+        uncalBadge.classList.add('show');
       }
 
       document.getElementById('distVal').textContent =
-        d.distance >= 0 ? d.distance.toFixed(1) : '--';
+        distance >= 0 ? distance.toFixed(1) : '--';
 
       document.getElementById('sensorStatus').textContent =
         d.sensor_ok ? 'OK' : 'ERROR';
