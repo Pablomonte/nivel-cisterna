@@ -843,12 +843,12 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
     <form id="sensorCalForm">
       <div>
         <label for="emptyDistance">Distancia "tanque vacio" (cm)</label>
-        <input id="emptyDistance" name="emptyDistance" type="number" step="0.1" min="1" max="400" required>
+        <input id="emptyDistance" name="emptyDistance" type="number" step="0.1" min="1" max="400" placeholder="ej. 145" required>
         <div class="hint">Distancia que mide el sensor cuando el tanque esta vacio (0%).</div>
       </div>
       <div>
         <label for="fullDistance">Distancia "tanque lleno" (cm)</label>
-        <input id="fullDistance" name="fullDistance" type="number" step="0.1" min="0" max="400" required>
+        <input id="fullDistance" name="fullDistance" type="number" step="0.1" min="1" max="400" placeholder="ej. 10" required>
         <div class="hint">Distancia que mide el sensor cuando el tanque esta lleno (100%). Debe ser menor que la de vacio.</div>
       </div>
       <div>
@@ -858,6 +858,7 @@ const char WIFI_ADMIN_HTML[] PROGMEM = R"rawliteral(
       </div>
       <div class="actions">
         <button class="primary" type="submit">Guardar calibracion</button>
+        <button class="secondary" type="button" id="clearCalBtn" hidden>Borrar calibracion</button>
       </div>
     </form>
     <div class="message" id="sensorCalMessage"></div>
@@ -1330,11 +1331,25 @@ function formatLive(value) {
 }
 
 function fillSensorCal(data) {
-  if (data.empty_distance_cm !== undefined) elements.emptyDistance.value = data.empty_distance_cm;
-  if (data.full_distance_cm !== undefined) elements.fullDistance.value = data.full_distance_cm;
+  // Muestra vacio si esta sin calibrar (0) en vez de "0" literal — el
+  // placeholder del input gui­a al usuario.
+  if (data.empty_distance_cm !== undefined) {
+    elements.emptyDistance.value = data.empty_distance_cm > 0 ? data.empty_distance_cm : '';
+  }
+  if (data.full_distance_cm !== undefined) {
+    elements.fullDistance.value = data.full_distance_cm > 0 ? data.full_distance_cm : '';
+  }
   if (data.offset_cm !== undefined) elements.sensorOffset.value = data.offset_cm;
   elements.liveDistance.textContent = formatLive(data.current_distance_cm);
   elements.liveLevel.textContent = formatLive(data.current_level_pct);
+
+  const clearBtn = document.getElementById('clearCalBtn');
+  if (clearBtn) {
+    const calibrated = data.empty_distance_cm > 0 &&
+                       data.full_distance_cm > 0 &&
+                       data.empty_distance_cm > data.full_distance_cm;
+    clearBtn.hidden = !calibrated;
+  }
 }
 
 async function loadSensorCal() {
@@ -1401,6 +1416,32 @@ elements.sensorCalForm.addEventListener('submit', async (event) => {
     showMessage(elements.sensorCalMessage, 'err', error.message || 'No se pudo guardar la calibracion.');
   } finally {
     if (submitBtn) submitBtn.disabled = false;
+  }
+});
+
+document.getElementById('clearCalBtn').addEventListener('click', async (event) => {
+  if (!confirm('Borrar la calibracion del tanque?\n\nEl dashboard volvera a mostrar la distancia bruta hasta que vuelvas a calibrar.')) {
+    return;
+  }
+  const btn = event.currentTarget;
+  clearMessage(elements.sensorCalMessage);
+  showMessage(elements.sensorCalMessage, 'warn', 'Borrando calibracion...');
+  btn.disabled = true;
+
+  try {
+    const response = await fetch('/api/sensor/calibrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tank: { empty_distance_cm: 0, full_distance_cm: 0 } })
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || 'No se pudo borrar la calibracion.');
+    showMessage(elements.sensorCalMessage, 'ok', 'Calibracion borrada. Dashboard mostrando distancia bruta.');
+    loadSensorCal();
+  } catch (error) {
+    showMessage(elements.sensorCalMessage, 'err', error.message || 'No se pudo borrar la calibracion.');
+  } finally {
+    btn.disabled = false;
   }
 });
 
